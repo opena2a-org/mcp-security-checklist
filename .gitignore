@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.*
+*.key
+*.pem
+.DS_Store
+mcp-audit-report.sarif

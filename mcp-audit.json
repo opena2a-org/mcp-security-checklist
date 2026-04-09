@@ -1,0 +1,93 @@
+{
+  "$schema": "https://raw.githubusercontent.com/opena2a-org/mcp-security-checklist/main/schemas/mcp-audit-schema.json",
+  "version": "1.0.0",
+  "audit": {
+    "target": {
+      "url": "https://your-mcp-server.example.com",
+      "protocol": "mcp-v1",
+      "transport": "streamable-http"
+    },
+    "checks": {
+      "transport": {
+        "enabled": true,
+        "requireTls13": true,
+        "requireHsts": true,
+        "checkCertificateExpiry": true,
+        "minimumCertValidityDays": 30
+      },
+      "authentication": {
+        "enabled": true,
+        "requireTokenAuth": true,
+        "maxTokenLifetimeSeconds": 3600,
+        "checkOAuthConfig": true,
+        "requireMtlsForServerToServer": false
+      },
+      "inputValidation": {
+        "enabled": true,
+        "requireJsonSchemaValidation": true,
+        "testInjectionPatterns": true,
+        "injectionPatternSources": [
+          "built-in",
+          "https://agentpwn.com/tools/mcp-parameter-fuzzer/patterns.json"
+        ],
+        "maxStringLength": 10000,
+        "allowedFilePathPrefixes": ["/data/", "/tmp/mcp/"],
+        "urlAllowlist": []
+      },
+      "sandboxing": {
+        "enabled": true,
+        "checkContainerIsolation": true,
+        "checkFilesystemRestrictions": true,
+        "checkNetworkRestrictions": true,
+        "checkResourceLimits": true,
+        "maxExecutionTimeMs": 30000,
+        "maxMemoryMb": 512
+      },
+      "credentials": {
+        "enabled": true,
+        "scanConfigForSecrets": true,
+        "checkEnvVarUsage": true,
+        "checkCredentialRotation": true,
+        "secretPatterns": [
+          "(?i)(api[_-]?key|secret|token|password|credential)\\s*[:=]\\s*['\"][^'\"]+['\"]",
+          "(?i)(sk-[a-zA-Z0-9]{20,})",
+          "(?i)(ghp_[a-zA-Z0-9]{36})",
+          "(?i)(AKIA[A-Z0-9]{16})"
+        ]
+      },
+      "promptInjection": {
+        "enabled": true,
+        "scanToolDescriptions": true,
+        "testIndirectInjection": true,
+        "attackPatternSource": "https://agentpwn.com/attacks/mcp-exploitation/1/patterns.json",
+        "checkOutputSanitization": true
+      },
+      "logging": {
+        "enabled": true,
+        "checkAuditLogging": true,
+        "checkSensitiveDataRedaction": true,
+        "checkLogRetention": true,
+        "requiredLogFields": ["timestamp", "callerId", "toolName", "parameters", "result", "duration"]
+      },
+      "network": {
+        "enabled": true,
+        "checkPublicExposure": true,
+        "checkRateLimiting": true,
+        "checkCorsConfig": true,
+        "checkDnsRebinding": true,
+        "maxRequestsPerMinute": 60
+      }
+    },
+    "reporting": {
+      "format": "sarif",
+      "outputFile": "./mcp-audit-report.sarif",
+      "severityThreshold": "medium",
+      "includeRemediation": true,
+      "remediationResources": {
+        "mcpSecurity": "https://agentpwn.com/learn",
+        "attackPatterns": "https://agentpwn.com/attacks/mcp-exploitation/1",
+        "toolTesting": "https://agentpwn.com/tools"
+      }
+    }
+  }
+}
