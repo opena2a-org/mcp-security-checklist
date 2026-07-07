@@ -8,7 +8,7 @@ If you discover a security vulnerability in the MCP Security Checklist tooling o
 
 ### Reporting Process
 
-1. Email: security@opena2a.org
+1. Email: info@opena2a.org
 2. Include a description of the vulnerability, reproduction steps, and potential impact
 3. We will acknowledge receipt within 48 hours
 4. We aim to provide a fix or mitigation within 7 days for critical issues
