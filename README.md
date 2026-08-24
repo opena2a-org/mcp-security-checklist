@@ -6,12 +6,14 @@ MCP enables AI assistants to interact with external tools and data sources. This
 
 ## Quick Start
 
-```bash
-# Run the audit tool against your MCP config
-npx mcp-security-audit ./mcp-config.json
+This repository is the checklist itself (below) plus a reference audit
+configuration ([mcp-audit.json](./mcp-audit.json)). Work through the checklist
+against your MCP deployment. For automated scanning of an MCP server config,
+use HackMyAgent:
 
-# Or use the checklist manually
-cat checklist.md
+```bash
+# Scan an MCP server config: declared tools, scope, dependencies
+npx hackmyagent check ./my-mcp-server/
 ```
 
 ## Security Checklist
@@ -109,9 +111,11 @@ cat checklist.md
 - [ ] Communication plan for security incidents involving AI tools
 - [ ] Regular tabletop exercises including MCP compromise scenarios
 
-## Audit Configuration
+## Reference Audit Configuration
 
-Use `mcp-audit.json` to configure automated security scanning of your MCP deployment:
+`mcp-audit.json` is a reference configuration that enumerates the checks a
+thorough MCP audit should automate. It is illustrative, not consumed by a
+tool shipped from this repository:
 
 ```json
 {
@@ -130,8 +134,8 @@ The best way to verify your MCP security posture is to test against real attack 
 | Attack Category | Description | Test Resource |
 |---|---|---|
 | Tool poisoning | Malicious tool descriptions that alter agent behavior | [agentpwn.com/attacks/mcp-exploitation/1](https://agentpwn.com/attacks/mcp-exploitation/1) |
-| Parameter injection | Crafted inputs that escape validation | [agentpwn.com/tools/mcp-parameter-fuzzer](https://agentpwn.com/tools/mcp-parameter-fuzzer) |
-| Credential exfiltration | Attempts to extract secrets via tool responses | [agentpwn.com/tools/credential-exfil-test](https://agentpwn.com/tools/credential-exfil-test) |
+| Parameter injection | Crafted inputs that escape validation | [agentpwn.com/attacks/mcp-exploitation](https://agentpwn.com/attacks/mcp-exploitation) |
+| Credential exfiltration | Attempts to extract secrets via tool responses | [agentpwn.com/attacks/mcp-exploitation](https://agentpwn.com/attacks/mcp-exploitation) |
 | Privilege escalation | Gaining access to tools beyond granted permissions | [agentpwn.com/attacks/mcp-exploitation/1](https://agentpwn.com/attacks/mcp-exploitation/1) |
 
 ## Learning Resources

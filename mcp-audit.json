@@ -1,5 +1,4 @@
 {
-  "$schema": "https://raw.githubusercontent.com/opena2a-org/mcp-security-checklist/main/schemas/mcp-audit-schema.json",
   "version": "1.0.0",
   "audit": {
     "target": {
@@ -27,8 +26,7 @@
         "requireJsonSchemaValidation": true,
         "testInjectionPatterns": true,
         "injectionPatternSources": [
-          "built-in",
-          "https://agentpwn.com/tools/mcp-parameter-fuzzer/patterns.json"
+          "built-in"
         ],
         "maxStringLength": 10000,
         "allowedFilePathPrefixes": ["/data/", "/tmp/mcp/"],
@@ -59,7 +57,7 @@
         "enabled": true,
         "scanToolDescriptions": true,
         "testIndirectInjection": true,
-        "attackPatternSource": "https://agentpwn.com/attacks/mcp-exploitation/1/patterns.json",
+        "attackPatternSource": "https://agentpwn.com/attacks/mcp-exploitation/1",
         "checkOutputSanitization": true
       },
       "logging": {
