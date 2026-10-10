@@ -174,10 +174,18 @@ The best way to verify your MCP security posture is to test against real attack 
 
 | Attack Category | Description | Test Resource |
 |---|---|---|
-| Tool poisoning | Malicious tool descriptions that alter agent behavior | [agentpwn.com/attacks/mcp-exploitation](https://agentpwn.com/attacks/mcp-exploitation) |
-| Parameter injection | Crafted inputs that escape validation | [agentpwn.com/attacks/mcp-exploitation](https://agentpwn.com/attacks/mcp-exploitation) |
-| Credential exfiltration | Attempts to extract secrets via tool responses | [agentpwn.com/attacks/mcp-exploitation](https://agentpwn.com/attacks/mcp-exploitation) |
+| Tool poisoning | Malicious tool descriptions that alter agent behavior | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2), which injects fake tool results and whose remediation also covers tool descriptions |
+| Parameter injection | Crafted inputs that escape validation | No dedicated test |
+| Credential exfiltration | Attempts to extract secrets via tool responses | No dedicated test |
 | Privilege escalation | Gaining access to tools beyond granted permissions | [agentpwn.com/attacks/mcp-exploitation/3](https://agentpwn.com/attacks/mcp-exploitation/3) |
+
+The agentpwn [MCP exploitation](https://agentpwn.com/attacks/mcp-exploitation)
+set has three tests: Tool Discovery, Tool Injection and Cross-Tool Exploit
+Chain. "No dedicated test" means none of the three targets that category.
+Cover it with your own test cases, starting from the checklist items in
+[3. Input Validation and Sanitization](#3-input-validation-and-sanitization),
+[5. Credential Management](#5-credential-management) and
+[6. Prompt Injection Defense](#6-prompt-injection-defense).
 
 ## Learning Resources
 
