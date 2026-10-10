@@ -233,9 +233,21 @@ test('the label check flags an address in a label that names another destination
   const VARIATION_SELECTOR_16 = String.fromCodePoint(0xfe0f);
   const VARIATION_SELECTOR_17 = String.fromCodePoint(0xe0100);
   const RIGHT_TO_LEFT_OVERRIDE = String.fromCodePoint(0x202e);
-  const SYRIAC_ABBREVIATION_MARK = String.fromCodePoint(0x070f);
-  const INTERLINEAR_ANNOTATION_ANCHOR = String.fromCodePoint(0xfff9);
-  const EGYPTIAN_HIEROGLYPH_VERTICAL_JOINER = String.fromCodePoint(0x13430);
+  const codePointName = (codePoint) => `U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}`;
+  // Every format character that is not default-ignorable, read from the Unicode tables at
+  // run time so the list stays complete when Unicode adds one.
+  const formatNotIgnorable = [];
+  for (let codePoint = 0; codePoint <= 0x10ffff; codePoint += 1) {
+    const character = String.fromCodePoint(codePoint);
+    if (/\p{Cf}/u.test(character) && !/\p{Default_Ignorable_Code_Point}/u.test(character)) {
+      formatNotIgnorable.push(character);
+    }
+  }
+  // The Syriac abbreviation mark, the interlinear annotation anchor and the Egyptian
+  // hieroglyph vertical joiner are in the list, so a broken read cannot leave it empty.
+  for (const codePoint of [0x070f, 0xfff9, 0x13430]) {
+    assert.ok(formatNotIgnorable.includes(String.fromCodePoint(codePoint)), `${codePointName(codePoint)} is missing`);
+  }
   const flagged = [
     'agentpwn.com/attacks/mcp-exploitation/2',
     'evil.example',
@@ -277,14 +289,18 @@ test('the label check flags an address in a label that names another destination
     // dropped like any other.
     `evil.${RIGHT_TO_LEFT_OVERRIDE}example`,
     // Some format characters are not default-ignorable (prepended concatenation marks,
-    // interlinear annotation controls, Egyptian hieroglyph format controls); they are
-    // dropped too.
-    `evil.${SYRIAC_ABBREVIATION_MARK}example`,
-    `evil.example${INTERLINEAR_ANNOTATION_ANCHOR}`,
-    `evil.exam${EGYPTIAN_HIEROGLYPH_VERTICAL_JOINER}ple`,
+    // interlinear annotation controls, Egyptian hieroglyph format controls); each one is
+    // dropped too, after a dot, inside a word and at the end.
+    ...formatNotIgnorable.flatMap((character) => [
+      `evil.${character}example`,
+      `evil.exam${character}ple`,
+      `evil.example${character}`,
+    ]),
   ];
-  // Every failing label is collected, so one run names all of them.
-  const notFlagged = flagged.filter((label) => !labelMismatch({ label, href: page }));
+  // Every failing label is collected, so one run names all of them. A character outside
+  // printable ASCII is shown as <U+XXXX>, since most of these are invisible.
+  const visible = (label) => label.replace(/[^\x20-\x7e]/gu, (character) => `<${codePointName(character.codePointAt(0))}>`);
+  const notFlagged = flagged.filter((label) => !labelMismatch({ label, href: page })).map(visible);
   assert.deepEqual(notFlagged, [], 'labels that name another destination but are not flagged');
   const matching = [
     ...[
