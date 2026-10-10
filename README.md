@@ -1,5 +1,9 @@
 # MCP Security Checklist
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
+
+> **[OpenA2A](https://github.com/opena2a-org/opena2a)**: [CLI](https://github.com/opena2a-org/opena2a) · [HackMyAgent](https://github.com/opena2a-org/hackmyagent) · [Secretless](https://github.com/opena2a-org/secretless-ai) · [AIM](https://github.com/opena2a-org/agent-identity-management) · [Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard) · [DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)
+
 A comprehensive security checklist for deploying and operating [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers in production environments.
 
 MCP enables AI assistants to interact with external tools and data sources. This power comes with significant security implications that must be addressed before deployment.
@@ -8,12 +12,42 @@ MCP enables AI assistants to interact with external tools and data sources. This
 
 This repository is the checklist itself (below) plus a reference audit
 configuration ([mcp-audit.json](./mcp-audit.json)). Work through the checklist
-against your MCP deployment. For automated scanning of an MCP server config,
+against your MCP deployment. For an automated scan of an MCP server project,
 use HackMyAgent:
 
 ```bash
-# Scan an MCP server config: declared tools, scope, dependencies
+# Quick scan of a local MCP server project
 npx hackmyagent check ./my-mcp-server/
+```
+
+Output from hackmyagent 0.33.2 on a two-file stdio MCP server, captured
+2026-10-09 (home directory shown as `~`):
+
+```text
+  ~/my-mcp-server  unknown · local · 2 files analyzed
+  No issues in the quick-scan matrix
+
+  Quick scan  ━━━━━━━━━━━━━━━━━━━━ 100/100
+  Run `secure ./my-mcp-server/` for the full audit (adds credentials, git hygiene, MCP config, file permissions).
+
+  ── Observations ────────────────────────────────────────────
+  Surfaces    local project · 2 semantic artifacts · all 2 artifacts reached 0-2 of 7 analyzer families
+  Checks      2 semantic (NanoMind AST, 0-2 of 7 analyzer families) · 318 static not run (quick scan)
+  Categories  semantic artifact matrix only  (318 static checks not evaluated)
+  Verdict     No issues in the semantic artifact matrix. This did NOT evaluate credentials, git hygiene, MCP config, file permissions — run `secure ./my-mcp-server/` before trusting it.
+
+  ── Next Steps ─────────────────────────────────────────────────
+  Governance scan:      hackmyagent scan-soul ~/my-mcp-server
+  Red-team test:        hackmyagent attack --local
+  AI analysis:          hackmyagent check ~/my-mcp-server --nanomind  (attack vectors + targeted remediation)
+  All commands:         hackmyagent --help
+```
+
+On a local path, `check` is a quick scan. For the full audit (credentials,
+git hygiene, MCP config, file permissions), run:
+
+```bash
+npx hackmyagent secure ./my-mcp-server/
 ```
 
 ## Security Checklist
