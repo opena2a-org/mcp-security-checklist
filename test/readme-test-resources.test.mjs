@@ -23,11 +23,15 @@ const KNOWN_TESTS = { 'mcp-exploitation': ['1', '2', '3'] };
 // Left in a resource cell once its test links are removed, any of these could
 // still render as a link: a URL, an autolink or HTML tag, or link brackets.
 const LINK_LEFTOVER = /https?:|www\.|<|\[|\]|@/i;
-// An address in a link label: a word (a run without spaces) holding "://", "www." or
-// "mailto:", or, at the start of the label, a domain followed by nothing, a path, a
-// query, a fragment or a port. A dotted name followed by a space or other text, or
-// after other text, reads as a name ("Node.js guide"), not as an address.
-const LABEL_ADDRESS = /\S*(?::\/\/|www\.|mailto:)\S*|^[a-z0-9.-]+\.[a-z]{2,}(?=$|[/?#]|:\d)\S*/gi;
+// A link label is read one word (a run without spaces) at a time, after dropping the
+// sentence punctuation that may follow it, so a long label is scanned in linear time.
+const TRAILING_PUNCTUATION = '.,;:!?';
+// A word that is an address: one holding "://", "www." or "mailto:", or a domain
+// followed by a path, a query, a fragment or a port.
+const ADDRESS_WORD = /:\/\/|www\.|mailto:|^[a-z0-9.-]+\.[a-z]{2,}(?:[/?#]|:\d)/i;
+// A domain with nothing after it is an address only when it is the whole label; next to
+// other text it reads as a name ("Node.js guide", "Built on Node.js").
+const BARE_DOMAIN = /^[a-z0-9.-]+\.[a-z]{2,}$/i;
 
 function section(heading) {
   const start = readme.indexOf(`## ${heading}\n`);
@@ -54,10 +58,21 @@ function isKnownTest(href) {
   return Boolean(match && KNOWN_TESTS[match[1]]?.includes(match[2]));
 }
 
+function trimTrailingPunctuation(word) {
+  let end = word.length;
+  while (end > 0 && TRAILING_PUNCTUATION.includes(word[end - 1])) end -= 1;
+  return word.slice(0, end);
+}
+
+function labelAddresses(label) {
+  const words = label.split(/\s+/).map(trimTrailingPunctuation).filter(Boolean);
+  return words.filter((word) => ADDRESS_WORD.test(word) || (words.length === 1 && BARE_DOMAIN.test(word)));
+}
+
 // True when an address in the label names a different destination: the target must
-// equal each address as written or with "https://" in front.
+// equal each address as written, with "https://" in front, or with "./" in front (a file name).
 function labelMismatch({ label, href }) {
-  return [...label.matchAll(LABEL_ADDRESS)].some(([address]) => href !== address && href !== `https://${address}`);
+  return labelAddresses(label).some((address) => ![address, `https://${address}`, `./${address}`].includes(href));
 }
 
 // Splits a table row on the pipes GitHub treats as cell borders; "\|" stays in its cell.
@@ -177,6 +192,21 @@ test('the link pattern scans a long run of "[" in linear time', () => {
   assert.ok(elapsed < 500, `took ${Math.round(elapsed)} ms`);
 });
 
+test('the label check reads a long label in linear time', () => {
+  const page = 'https://agentpwn.com/attacks/mcp-exploitation/3';
+  for (const [name, label] of [
+    ['a run of "a"', 'a'.repeat(100000)],
+    ['a run of "." before a letter', `${'.'.repeat(100000)}a`],
+    ['a dotted run', 'a.'.repeat(50000)],
+  ]) {
+    const start = performance.now();
+    labelMismatch({ label, href: page });
+    const elapsed = performance.now() - start;
+    // A quadratic scan of this input takes seconds; a linear one takes milliseconds.
+    assert.ok(elapsed < 500, `${name} took ${Math.round(elapsed)} ms`);
+  }
+});
+
 test('a link whose label holds an address points at that address', () => {
   for (const link of links(testing)) {
     assert.ok(!labelMismatch(link), `label and target differ for [${link.label}](${link.href})`);
@@ -198,6 +228,11 @@ test('the label check flags an address in a label that names another destination
     'https://evil.example',
     'mailto:security@evil.example',
     'agentpwn.com/attacks/mcp-exploitation/3 or https://evil.example',
+    // A domain followed by a path, a query, a fragment or a port is an address after other text too.
+    'agentpwn.com/attacks/mcp-exploitation/3 see evil.example/x',
+    'See evil.example:8080',
+    'See https://evil.example.',
+    'evil.example.',
   ];
   for (const label of flagged) {
     assert.ok(labelMismatch({ label, href: page }), `not flagged: [${label}]`);
@@ -217,10 +252,15 @@ test('the label check flags an address in a label that names another destination
       'evil.example, test 3',
       'Built on Node.js',
       'i.e',
+      // Sentence punctuation after an address is not part of it.
+      `See ${page}.`,
+      `${page}, test 3`,
+      'agentpwn.com/attacks/mcp-exploitation/3!',
     ].map((label) => ({ label, href: page })),
-    // A file name reads like a domain; it matches a target written the same way.
+    // A file name reads like a domain; it matches a target written the same way or with "./" in front.
     { label: 'SECURITY.md', href: 'SECURITY.md' },
     { label: 'mcp-audit.json', href: 'mcp-audit.json' },
+    { label: 'mcp-audit.json', href: './mcp-audit.json' },
   ];
   for (const link of matching) {
     assert.ok(!labelMismatch(link), `flagged: [${link.label}](${link.href})`);
