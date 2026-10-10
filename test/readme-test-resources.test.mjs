@@ -68,6 +68,8 @@ function trimTrailingPunctuation(word) {
 // Invisible characters are dropped first, so they cannot split or end an address: the
 // format characters (such as a zero-width space) and the other characters Unicode marks
 // as default-ignorable (such as the combining grapheme joiner and variation selectors).
+// Neither class holds the other: some format characters, such as U+070F, are not
+// default-ignorable.
 function labelAddresses(label) {
   const words = label
     .replace(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, '')
@@ -231,6 +233,9 @@ test('the label check flags an address in a label that names another destination
   const VARIATION_SELECTOR_16 = String.fromCodePoint(0xfe0f);
   const VARIATION_SELECTOR_17 = String.fromCodePoint(0xe0100);
   const RIGHT_TO_LEFT_OVERRIDE = String.fromCodePoint(0x202e);
+  const SYRIAC_ABBREVIATION_MARK = String.fromCodePoint(0x070f);
+  const INTERLINEAR_ANNOTATION_ANCHOR = String.fromCodePoint(0xfff9);
+  const EGYPTIAN_HIEROGLYPH_VERTICAL_JOINER = String.fromCodePoint(0x13430);
   const flagged = [
     'agentpwn.com/attacks/mcp-exploitation/2',
     'evil.example',
@@ -271,6 +276,12 @@ test('the label check flags an address in a label that names another destination
     // A bidirectional override, the format character most often used to disguise a
     // link, is dropped like any other.
     `evil.${RIGHT_TO_LEFT_OVERRIDE}example`,
+    // Some format characters are not default-ignorable (prepended concatenation marks,
+    // interlinear annotation controls, Egyptian hieroglyph format controls); they are
+    // dropped too.
+    `evil.${SYRIAC_ABBREVIATION_MARK}example`,
+    `evil.example${INTERLINEAR_ANNOTATION_ANCHOR}`,
+    `evil.exam${EGYPTIAN_HIEROGLYPH_VERTICAL_JOINER}ple`,
   ];
   // Every failing label is collected, so one run names all of them.
   const notFlagged = flagged.filter((label) => !labelMismatch({ label, href: page }));
