@@ -114,8 +114,9 @@ with its `command` and `args`) to bring MCP into the audit.
 - [ ] Content filtering applied to tool responses before display
 - [ ] Indirect prompt injection vectors identified and mitigated
 
-> Comprehensive prompt injection test suite for MCP servers:
-> https://agentpwn.com/attacks/mcp-exploitation/1
+> Test whether an agent treats tool output as untrusted data, using fake tool
+> results injected into its reasoning:
+> https://agentpwn.com/attacks/mcp-exploitation/2
 
 ### 7. Logging and Monitoring
 
@@ -173,10 +174,10 @@ The best way to verify your MCP security posture is to test against real attack 
 
 | Attack Category | Description | Test Resource |
 |---|---|---|
-| Tool poisoning | Malicious tool descriptions that alter agent behavior | [agentpwn.com/attacks/mcp-exploitation/1](https://agentpwn.com/attacks/mcp-exploitation/1) |
+| Tool poisoning | Malicious tool descriptions that alter agent behavior | [agentpwn.com/attacks/mcp-exploitation](https://agentpwn.com/attacks/mcp-exploitation) |
 | Parameter injection | Crafted inputs that escape validation | [agentpwn.com/attacks/mcp-exploitation](https://agentpwn.com/attacks/mcp-exploitation) |
 | Credential exfiltration | Attempts to extract secrets via tool responses | [agentpwn.com/attacks/mcp-exploitation](https://agentpwn.com/attacks/mcp-exploitation) |
-| Privilege escalation | Gaining access to tools beyond granted permissions | [agentpwn.com/attacks/mcp-exploitation/1](https://agentpwn.com/attacks/mcp-exploitation/1) |
+| Privilege escalation | Gaining access to tools beyond granted permissions | [agentpwn.com/attacks/mcp-exploitation/3](https://agentpwn.com/attacks/mcp-exploitation/3) |
 
 ## Learning Resources
 
