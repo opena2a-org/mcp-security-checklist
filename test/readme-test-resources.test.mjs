@@ -224,6 +224,7 @@ test('a link whose label holds an address points at that address', () => {
 
 test('the label check flags an address in a label that names another destination', () => {
   const page = 'https://agentpwn.com/attacks/mcp-exploitation/3';
+  const ZERO_WIDTH_SPACE = String.fromCodePoint(0x200b);
   const flagged = [
     'agentpwn.com/attacks/mcp-exploitation/2',
     'evil.example',
@@ -249,9 +250,10 @@ test('the label check flags an address in a label that names another destination
     // Each address pattern ignores case.
     'See EVIL.EXAMPLE/x',
     'EVIL.EXAMPLE',
-    // An invisible format character does not hide an address.
-    'evil.example​',
-    'evil.​example',
+    // An invisible format character does not hide an address. The zero-width space is
+    // built at run time so the source file holds no invisible character.
+    `evil.example${ZERO_WIDTH_SPACE}`,
+    `evil.${ZERO_WIDTH_SPACE}example`,
   ];
   for (const label of flagged) {
     assert.ok(labelMismatch({ label, href: page }), `not flagged: [${label}]`);
