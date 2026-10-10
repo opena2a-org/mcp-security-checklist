@@ -64,15 +64,24 @@ function trimTrailingPunctuation(word) {
   return word.slice(0, end);
 }
 
+// Returns each address in the label, as written and without its trailing punctuation.
+// Invisible format characters (such as a zero-width space) are dropped first, so they
+// cannot split or end an address.
 function labelAddresses(label) {
-  const words = label.split(/\s+/).map(trimTrailingPunctuation).filter(Boolean);
-  return words.filter((word) => ADDRESS_WORD.test(word) || (words.length === 1 && BARE_DOMAIN.test(word)));
+  const words = label
+    .replace(/\p{Cf}/gu, '')
+    .split(/\s+/)
+    .map((written) => ({ written, address: trimTrailingPunctuation(written) }))
+    .filter(({ address }) => address);
+  return words.filter(({ address }) => ADDRESS_WORD.test(address) || (words.length === 1 && BARE_DOMAIN.test(address)));
 }
 
 // True when an address in the label names a different destination: the target must
-// equal each address as written, with "https://" in front, or with "./" in front (a file name).
+// equal each address, with or without its trailing punctuation, as written, with
+// "https://" in front, or with "./" in front (a file name).
 function labelMismatch({ label, href }) {
-  return labelAddresses(label).some((address) => ![address, `https://${address}`, `./${address}`].includes(href));
+  return labelAddresses(label).some(({ written, address }) =>
+    ![written, address].some((form) => [form, `https://${form}`, `./${form}`].includes(href)));
 }
 
 // Splits a table row on the pipes GitHub treats as cell borders; "\|" stays in its cell.
@@ -233,6 +242,16 @@ test('the label check flags an address in a label that names another destination
     'See evil.example:8080',
     'See https://evil.example.',
     'evil.example.',
+    // Any whitespace separates words, and the empty words around it are dropped.
+    'See\tevil.example/x',
+    ' evil.example',
+    'evil.example ',
+    // Each address pattern ignores case.
+    'See EVIL.EXAMPLE/x',
+    'EVIL.EXAMPLE',
+    // An invisible format character does not hide an address.
+    'evil.example​',
+    'evil.​example',
   ];
   for (const label of flagged) {
     assert.ok(labelMismatch({ label, href: page }), `not flagged: [${label}]`);
@@ -256,7 +275,11 @@ test('the label check flags an address in a label that names another destination
       `See ${page}.`,
       `${page}, test 3`,
       'agentpwn.com/attacks/mcp-exploitation/3!',
+      `See\t${page}.`,
     ].map((label) => ({ label, href: page })),
+    // A target that ends in sentence punctuation matches a label written the same way.
+    { label: `${page}.`, href: `${page}.` },
+    { label: `${page}?`, href: `${page}?` },
     // A file name reads like a domain; it matches a target written the same way or with "./" in front.
     { label: 'SECURITY.md', href: 'SECURITY.md' },
     { label: 'mcp-audit.json', href: 'mcp-audit.json' },
