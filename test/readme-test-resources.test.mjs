@@ -230,6 +230,7 @@ test('the label check flags an address in a label that names another destination
   const VARIATION_SELECTOR_1 = String.fromCodePoint(0xfe00);
   const VARIATION_SELECTOR_16 = String.fromCodePoint(0xfe0f);
   const VARIATION_SELECTOR_17 = String.fromCodePoint(0xe0100);
+  const RIGHT_TO_LEFT_OVERRIDE = String.fromCodePoint(0x202e);
   const flagged = [
     'agentpwn.com/attacks/mcp-exploitation/2',
     'evil.example',
@@ -267,6 +268,9 @@ test('the label check flags an address in a label that names another destination
     `evil.example${VARIATION_SELECTOR_16}`,
     `evil.exam${VARIATION_SELECTOR_16}ple`,
     `evil.example${VARIATION_SELECTOR_17}`,
+    // A bidirectional override, the format character most often used to disguise a
+    // link, is dropped like any other.
+    `evil.${RIGHT_TO_LEFT_OVERRIDE}example`,
   ];
   // Every failing label is collected, so one run names all of them.
   const notFlagged = flagged.filter((label) => !labelMismatch({ label, href: page }));
