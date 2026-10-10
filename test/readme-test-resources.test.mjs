@@ -65,11 +65,12 @@ function trimTrailingPunctuation(word) {
 }
 
 // Returns each address in the label, as written and without its trailing punctuation.
-// Invisible format characters (such as a zero-width space) are dropped first, so they
-// cannot split or end an address.
+// Invisible characters are dropped first, so they cannot split or end an address: the
+// format characters (such as a zero-width space) and the other characters Unicode marks
+// as default-ignorable (such as the combining grapheme joiner and variation selectors).
 function labelAddresses(label) {
   const words = label
-    .replace(/\p{Cf}/gu, '')
+    .replace(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, '')
     .split(/\s+/)
     .map((written) => ({ written, address: trimTrailingPunctuation(written) }))
     .filter(({ address }) => address);
@@ -225,6 +226,10 @@ test('a link whose label holds an address points at that address', () => {
 test('the label check flags an address in a label that names another destination', () => {
   const page = 'https://agentpwn.com/attacks/mcp-exploitation/3';
   const ZERO_WIDTH_SPACE = String.fromCodePoint(0x200b);
+  const COMBINING_GRAPHEME_JOINER = String.fromCodePoint(0x034f);
+  const VARIATION_SELECTOR_1 = String.fromCodePoint(0xfe00);
+  const VARIATION_SELECTOR_16 = String.fromCodePoint(0xfe0f);
+  const VARIATION_SELECTOR_17 = String.fromCodePoint(0xe0100);
   const flagged = [
     'agentpwn.com/attacks/mcp-exploitation/2',
     'evil.example',
@@ -250,10 +255,18 @@ test('the label check flags an address in a label that names another destination
     // Each address pattern ignores case.
     'See EVIL.EXAMPLE/x',
     'EVIL.EXAMPLE',
-    // An invisible format character does not hide an address. The zero-width space is
-    // built at run time so the source file holds no invisible character.
+    // An invisible character does not hide an address, whether it is a format character
+    // (the zero-width space) or a mark (the combining grapheme joiner, a variation
+    // selector). Each one is built at run time so the source file holds no invisible
+    // character.
     `evil.example${ZERO_WIDTH_SPACE}`,
     `evil.${ZERO_WIDTH_SPACE}example`,
+    `evil.exam${COMBINING_GRAPHEME_JOINER}ple`,
+    `evil.example${COMBINING_GRAPHEME_JOINER}`,
+    `evil.example${VARIATION_SELECTOR_1}`,
+    `evil.example${VARIATION_SELECTOR_16}`,
+    `evil.exam${VARIATION_SELECTOR_16}ple`,
+    `evil.example${VARIATION_SELECTOR_17}`,
   ];
   for (const label of flagged) {
     assert.ok(labelMismatch({ label, href: page }), `not flagged: [${label}]`);
