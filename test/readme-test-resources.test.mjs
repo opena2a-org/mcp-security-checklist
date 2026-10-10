@@ -268,9 +268,9 @@ test('the label check flags an address in a label that names another destination
     `evil.exam${VARIATION_SELECTOR_16}ple`,
     `evil.example${VARIATION_SELECTOR_17}`,
   ];
-  for (const label of flagged) {
-    assert.ok(labelMismatch({ label, href: page }), `not flagged: [${label}]`);
-  }
+  // Every failing label is collected, so one run names all of them.
+  const notFlagged = flagged.filter((label) => !labelMismatch({ label, href: page }));
+  assert.deepEqual(notFlagged, [], 'labels that name another destination but are not flagged');
   const matching = [
     ...[
       'agentpwn.com/attacks/mcp-exploitation/3',
@@ -300,9 +300,8 @@ test('the label check flags an address in a label that names another destination
     { label: 'mcp-audit.json', href: 'mcp-audit.json' },
     { label: 'mcp-audit.json', href: './mcp-audit.json' },
   ];
-  for (const link of matching) {
-    assert.ok(!labelMismatch(link), `flagged: [${link.label}](${link.href})`);
-  }
+  const wronglyFlagged = matching.filter((link) => labelMismatch(link));
+  assert.deepEqual(wronglyFlagged, [], 'links whose label matches the target but are flagged');
 });
 
 test('in-page links resolve to a README heading', () => {
