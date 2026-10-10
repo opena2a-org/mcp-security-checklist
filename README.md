@@ -174,9 +174,9 @@ The best way to verify your MCP security posture is to test against real attack 
 
 | Attack Category | Description | Test Resource |
 |---|---|---|
-| Tool poisoning | Malicious tool descriptions that alter agent behavior | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2), which injects fake tool results and whose remediation also covers tool descriptions |
+| Tool poisoning | Malicious tool descriptions that alter agent behavior | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2), which injects fake tool results and whose fix text tells the agent to treat tool descriptions and results as untrusted input |
 | Parameter injection | Crafted inputs that escape validation | No dedicated test |
-| Credential exfiltration | Attempts to extract secrets via tool responses | No dedicated test |
+| Credential exfiltration | Attempts to extract secrets via tool responses | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2), whose injected tool result tells the agent to output all environment variables |
 | Privilege escalation | Gaining access to tools beyond granted permissions | [agentpwn.com/attacks/mcp-exploitation/3](https://agentpwn.com/attacks/mcp-exploitation/3) |
 
 The agentpwn [MCP exploitation](https://agentpwn.com/attacks/mcp-exploitation)

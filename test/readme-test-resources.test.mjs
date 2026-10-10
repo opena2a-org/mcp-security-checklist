@@ -11,6 +11,7 @@ const NO_TEST = 'No dedicated test';
 const LINK = /\[([^\]]+)\]\(([^)\s]+)\)/g;
 // An attack category page lists tests; a single test lives at <category>/<n>.
 const CATEGORY_INDEX = /^https:\/\/agentpwn\.com\/attacks\/[a-z0-9-]+\/?$/;
+const TEST_PAGE = /^https:\/\/agentpwn\.com\/attacks\/[a-z0-9-]+\/\d+\/?$/;
 
 function section(heading) {
   const start = readme.indexOf(`## ${heading}\n`);
@@ -52,9 +53,13 @@ test('no row cites an attack category index page as its test', () => {
 
 test('every row links a specific test or states that none exists', () => {
   const offenders = rows
-    .filter((row) => links(row.resource).length === 0 && !row.resource.includes(NO_TEST))
+    .filter((row) => {
+      const hrefs = links(row.resource).map(({ href }) => href);
+      if (hrefs.some((href) => !TEST_PAGE.test(href))) return true;
+      return hrefs.length === 0 && !row.resource.includes(NO_TEST);
+    })
     .map((row) => row.category);
-  assert.deepEqual(offenders, [], `rows with neither a link nor "${NO_TEST}"`);
+  assert.deepEqual(offenders, [], `rows linking a page other than an agentpwn test, or with neither a test link nor "${NO_TEST}"`);
 });
 
 test('a link labelled with a URL points at that URL', () => {
