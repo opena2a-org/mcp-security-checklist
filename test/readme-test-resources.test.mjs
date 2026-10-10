@@ -273,8 +273,8 @@ test('the label check flags an address in a label that names another destination
     `evil.example${VARIATION_SELECTOR_16}`,
     `evil.exam${VARIATION_SELECTOR_16}ple`,
     `evil.example${VARIATION_SELECTOR_17}`,
-    // A bidirectional override, the format character most often used to disguise a
-    // link, is dropped like any other.
+    // A bidirectional override, a format character often used to disguise a link, is
+    // dropped like any other.
     `evil.${RIGHT_TO_LEFT_OVERRIDE}example`,
     // Some format characters are not default-ignorable (prepended concatenation marks,
     // interlinear annotation controls, Egyptian hieroglyph format controls); they are
