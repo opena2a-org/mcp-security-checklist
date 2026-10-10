@@ -34,6 +34,7 @@ Output from hackmyagent 0.33.2 on a two-file stdio MCP server, captured
   Categories  semantic artifact matrix only  (318 static checks not evaluated)
   Verdict     No issues in the semantic artifact matrix. This did NOT evaluate credentials, git hygiene, MCP config, file permissions — run `secure ./my-mcp-server/` before trusting it.
 
+
   ── Next Steps ─────────────────────────────────────────────────
   Governance scan:      hackmyagent scan-soul ~/my-mcp-server
   Red-team test:        hackmyagent attack --local
@@ -47,6 +48,13 @@ git hygiene, MCP config, file permissions), run:
 ```bash
 npx hackmyagent secure ./my-mcp-server/
 ```
+
+The full audit's MCP checks read an MCP configuration file (for example a
+`.mcp.json` that registers the server), not the server source. On a project
+that holds only server code, such as the two-file example above, hackmyagent
+0.33.2 lists MCP on the `Unexamined` line and reports no MCP findings. Add
+the configuration your clients use to launch the server (a `.mcp.json` entry
+with its `command` and `args`) to bring MCP into the audit.
 
 ## Security Checklist
 
@@ -77,7 +85,7 @@ npx hackmyagent secure ./my-mcp-server/
 - [ ] Recursive or self-referencing inputs rejected
 
 > Test your MCP input validation against known attack patterns:
-> https://agentpwn.com/attacks/mcp-exploitation/1
+> https://agentpwn.com/attacks/mcp-exploitation
 
 ### 4. Tool Sandboxing
 
@@ -190,4 +198,5 @@ Contributions welcome. Please open an issue or PR if you identify missing checkl
 
 ## License
 
-MIT
+Licensed under the Creative Commons Attribution 4.0 International License
+(CC BY 4.0). See [LICENSE](./LICENSE).
