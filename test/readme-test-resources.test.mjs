@@ -9,12 +9,11 @@ const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
 
 const NO_TEST = 'No dedicated test';
 // An inline link or image: [label](destination) or [label](<destination>), with
-// optional spaces around the destination and an optional quoted title. Both parts
-// are bounded and the label cannot contain a bracket, so a long run of "[" is
-// scanned in linear time.
-const LINK = /(!?)\[([^\][]{0,300})\]\(\s*(?:<([^<>\s]{1,500})>|([^()<>\s]{1,500}))(?:\s+"[^"]{0,300}")?\s*\)/g;
-// An attack category page lists tests; a single test lives at <category>/<n>.
-const CATEGORY_INDEX = /^https:\/\/agentpwn\.com\/attacks\/[a-z0-9-]+\/?$/;
+// optional spaces around the destination and an optional title in double quotes,
+// single quotes or parentheses. All parts are bounded and the label cannot contain
+// a bracket, so a long run of "[" is scanned in linear time.
+const LINK = /(!?)\[([^\][]{0,300})\]\(\s*(?:<([^<>\s]{1,500})>|([^()<>\s]{1,500}))(?:\s+(?:"[^"]{0,300}"|'[^']{0,300}'|\([^()]{0,300}\)))?\s*\)/g;
+// A single test lives at <category>/<n>; the category page itself only lists tests.
 const TEST_PAGE = /^https:\/\/agentpwn\.com\/attacks\/([a-z0-9-]+)\/(\d+)\/?$/;
 // Tests that exist on agentpwn.com, by attack category. The README names the
 // three MCP exploitation tests; add a number only once its page exists.
@@ -22,6 +21,9 @@ const KNOWN_TESTS = { 'mcp-exploitation': ['1', '2', '3'] };
 // Left in a resource cell once its test links are removed, any of these could
 // still render as a link: a URL, an autolink or HTML tag, or link brackets.
 const LINK_LEFTOVER = /https?:|www\.|<|\[|\]|@/i;
+// A label reads as a web address when it holds a scheme or "www.", or starts with a
+// domain followed by a path or nothing.
+const ADDRESS_LABEL = /:\/\/|www\.|^[a-z0-9.-]+\.[a-z]{2,}(?:\/|$)/i;
 
 function section(heading) {
   const start = readme.indexOf(`## ${heading}\n`);
@@ -48,6 +50,12 @@ function isKnownTest(href) {
   return Boolean(match && KNOWN_TESTS[match[1]]?.includes(match[2]));
 }
 
+// True when a label that reads as a web address names a different destination.
+function labelMismatch({ label, href }) {
+  if (!ADDRESS_LABEL.test(label)) return false;
+  return href !== (/^[a-z][a-z0-9+.-]*:\/\//i.test(label) ? label : `https://${label}`);
+}
+
 // Splits a table row on the pipes GitHub treats as cell borders; "\|" stays in its cell.
 function cells(line) {
   return line.split(/(?<!\\)\|/).slice(1, -1).map((cell) => cell.trim());
@@ -67,7 +75,8 @@ function tableRows(text) {
 function resourceProblem(resource) {
   let testLinks = 0;
   const rest = resource.replace(LINK, (whole, image, label, angled, plain) => {
-    if (image || !isKnownTest(angled ?? plain)) return whole;
+    // Raw HTML or an autolink inside the label could link somewhere else.
+    if (image || label.includes('<') || !isKnownTest(angled ?? plain)) return whole;
     testLinks += 1;
     return '';
   });
@@ -87,13 +96,6 @@ test('the table lists attack categories with a test resource cell', () => {
   }
 });
 
-test('no row cites an attack category index page as its test', () => {
-  const offenders = rows
-    .filter((row) => links(row.resource).some(({ href }) => CATEGORY_INDEX.test(href)))
-    .map((row) => row.category);
-  assert.deepEqual(offenders, [], 'rows linking a category index instead of a specific test');
-});
-
 test('every row links a specific test or states that none exists', () => {
   const offenders = rows
     .map((row) => ({ category: row.category, problem: resourceProblem(row.resource) }))
@@ -103,7 +105,13 @@ test('every row links a specific test or states that none exists', () => {
 
 test('the resource check rejects every link that is not a known test', () => {
   const learn = 'https://agentpwn.com/learn';
+  const page = 'https://agentpwn.com/attacks/mcp-exploitation/3';
   const cellsWithOtherLinks = [
+    // Each of these carries one link marker only, so dropping that marker from the check fails here.
+    'No dedicated test. See <br>',
+    'No dedicated test. Mail security@example.com',
+    'No dedicated test. See [course',
+    'No dedicated test. See course]',
     `No dedicated test. See [course [beta]](${learn})`,
     `No dedicated test. See [course \\[beta\\]](${learn})`,
     `No dedicated test. See [course]( ${learn} )`,
@@ -118,7 +126,12 @@ test('the resource check rejects every link that is not a known test', () => {
     'No dedicated test. See www.agentpwn.com/learn',
     '[t](https://agentpwn.com/attacks/mcp-exploitation/99)',
     '[t](https://agentpwn.com/attacks/prompt-injection/1)',
-    '![t](https://agentpwn.com/attacks/mcp-exploitation/3)',
+    `[t](${page}/extra)`,
+    `[t](${page}?utm=1)`,
+    '[MCP exploitation](https://agentpwn.com/attacks/mcp-exploitation)',
+    '[MCP exploitation](https://agentpwn.com/attacks/mcp-exploitation/)',
+    `[<a href="https://example.com">x</a>](${page})`,
+    `![t](${page})`,
     'Not covered',
   ];
   for (const resource of cellsWithOtherLinks) {
@@ -128,13 +141,15 @@ test('the resource check rejects every link that is not a known test', () => {
   }
 });
 
-test('the resource check accepts a known test link in every form GitHub renders as a link', () => {
+test('the resource check accepts a known test as an inline link with any destination or title form', () => {
   const page = 'https://agentpwn.com/attacks/mcp-exploitation/3';
   const accepted = [
     `[agentpwn.com/attacks/mcp-exploitation/3](${page})`,
     `[t](<${page}>)`,
     `[t]( ${page} )`,
     `[t](${page} "Cross-Tool Exploit Chain")`,
+    `[t](${page} 'Cross-Tool Exploit Chain')`,
+    `[t](${page} (Cross-Tool Exploit Chain))`,
     `No dedicated test. Closest: [t](${page}), which is near`,
     NO_TEST,
   ];
@@ -156,11 +171,27 @@ test('the link pattern scans a long run of "[" in linear time', () => {
   assert.ok(elapsed < 500, `took ${Math.round(elapsed)} ms`);
 });
 
-test('a link labelled with a URL points at that URL', () => {
-  for (const { label, href } of links(testing)) {
-    if (/^[a-z0-9.-]+\.[a-z]+\//.test(label)) {
-      assert.equal(href, `https://${label}`, `label and target differ for [${label}]`);
-    }
+test('a link labelled with a web address points at that address', () => {
+  for (const link of links(testing)) {
+    assert.ok(!labelMismatch(link), `label and target differ for [${link.label}](${link.href})`);
+  }
+});
+
+test('the label check flags a web address label that names another destination', () => {
+  const page = 'https://agentpwn.com/attacks/mcp-exploitation/3';
+  const flagged = [
+    'agentpwn.com/attacks/mcp-exploitation/2',
+    'evil.example',
+    'www.evil.example',
+    'See www.evil.example',
+    'https://evil.example',
+  ];
+  for (const label of flagged) {
+    assert.ok(labelMismatch({ label, href: page }), `not flagged: [${label}]`);
+  }
+  const matching = ['agentpwn.com/attacks/mcp-exploitation/3', page, 'MCP exploitation', '3. Input Validation and Sanitization'];
+  for (const label of matching) {
+    assert.ok(!labelMismatch({ label, href: page }), `flagged: [${label}]`);
   }
 });
 
