@@ -6,6 +6,9 @@ dist/
 *.pem
 *.p12
 *.pfx
+# Matched at any depth on purpose, so a secrets file in a subdirectory stays
+# out of commits too. To track a fixture with one of these names, add a
+# negation after them, for example: !test/fixtures/credentials.json
 secrets.json
 credentials.json
 .DS_Store
