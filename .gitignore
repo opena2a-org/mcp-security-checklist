@@ -4,5 +4,9 @@ dist/
 .env.*
 *.key
 *.pem
+*.p12
+*.pfx
+secrets.json
+credentials.json
 .DS_Store
 mcp-audit-report.sarif
