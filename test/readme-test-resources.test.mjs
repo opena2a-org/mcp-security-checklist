@@ -10,8 +10,10 @@ const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
 const NO_TEST = 'No dedicated test';
 // An inline link or image: [label](destination) or [label](<destination>), with
 // optional spaces around the destination and an optional title in double quotes,
-// single quotes or parentheses. All parts are bounded and the label cannot contain
-// a bracket, so a long run of "[" is scanned in linear time.
+// single quotes or parentheses. The label, destination and title have length limits;
+// a longer one, or a title holding a backslash-escaped delimiter, is not read as a
+// link. The label cannot contain a bracket, so a long run of "[" is scanned in
+// linear time.
 const LINK = /(!?)\[([^\][]{0,300})\]\(\s*(?:<([^<>\s]{1,500})>|([^()<>\s]{1,500}))(?:\s+(?:"[^"]{0,300}"|'[^']{0,300}'|\([^()]{0,300}\)))?\s*\)/g;
 // A single test lives at <category>/<n>; the category page itself only lists tests.
 const TEST_PAGE = /^https:\/\/agentpwn\.com\/attacks\/([a-z0-9-]+)\/(\d+)\/?$/;
@@ -21,9 +23,11 @@ const KNOWN_TESTS = { 'mcp-exploitation': ['1', '2', '3'] };
 // Left in a resource cell once its test links are removed, any of these could
 // still render as a link: a URL, an autolink or HTML tag, or link brackets.
 const LINK_LEFTOVER = /https?:|www\.|<|\[|\]|@/i;
-// A label reads as a web address when it holds a scheme or "www.", or starts with a
-// domain followed by a path or nothing.
-const ADDRESS_LABEL = /:\/\/|www\.|^[a-z0-9.-]+\.[a-z]{2,}(?:\/|$)/i;
+// An address in a link label: a word (a run without spaces) holding "://", "www." or
+// "mailto:", or, at the start of the label, a domain followed by nothing, a path, a
+// query, a fragment or a port. A dotted name followed by a space or other text, or
+// after other text, reads as a name ("Node.js guide"), not as an address.
+const LABEL_ADDRESS = /\S*(?::\/\/|www\.|mailto:)\S*|^[a-z0-9.-]+\.[a-z]{2,}(?=$|[/?#]|:\d)\S*/gi;
 
 function section(heading) {
   const start = readme.indexOf(`## ${heading}\n`);
@@ -50,10 +54,10 @@ function isKnownTest(href) {
   return Boolean(match && KNOWN_TESTS[match[1]]?.includes(match[2]));
 }
 
-// True when a label that reads as a web address names a different destination.
+// True when an address in the label names a different destination: the target must
+// equal each address as written or with "https://" in front.
 function labelMismatch({ label, href }) {
-  if (!ADDRESS_LABEL.test(label)) return false;
-  return href !== (/^[a-z][a-z0-9+.-]*:\/\//i.test(label) ? label : `https://${label}`);
+  return [...label.matchAll(LABEL_ADDRESS)].some(([address]) => href !== address && href !== `https://${address}`);
 }
 
 // Splits a table row on the pipes GitHub treats as cell borders; "\|" stays in its cell.
@@ -107,7 +111,7 @@ test('the resource check rejects every link that is not a known test', () => {
   const learn = 'https://agentpwn.com/learn';
   const page = 'https://agentpwn.com/attacks/mcp-exploitation/3';
   const cellsWithOtherLinks = [
-    // Each of these carries one link marker only, so dropping that marker from the check fails here.
+    // Each of the next four carries one link marker only, so dropping that marker from the check fails here.
     'No dedicated test. See <br>',
     'No dedicated test. Mail security@example.com',
     'No dedicated test. See [course',
@@ -128,6 +132,8 @@ test('the resource check rejects every link that is not a known test', () => {
     '[t](https://agentpwn.com/attacks/prompt-injection/1)',
     `[t](${page}/extra)`,
     `[t](${page}?utm=1)`,
+    `[t](https://evil.example/${page})`,
+    '[t](http://agentpwn.com/attacks/mcp-exploitation/3)',
     '[MCP exploitation](https://agentpwn.com/attacks/mcp-exploitation)',
     '[MCP exploitation](https://agentpwn.com/attacks/mcp-exploitation/)',
     `[<a href="https://example.com">x</a>](${page})`,
@@ -141,7 +147,7 @@ test('the resource check rejects every link that is not a known test', () => {
   }
 });
 
-test('the resource check accepts a known test as an inline link with any destination or title form', () => {
+test('the resource check accepts a known test link with a plain, spaced or angled destination and an optional title in each delimiter', () => {
   const page = 'https://agentpwn.com/attacks/mcp-exploitation/3';
   const accepted = [
     `[agentpwn.com/attacks/mcp-exploitation/3](${page})`,
@@ -171,27 +177,53 @@ test('the link pattern scans a long run of "[" in linear time', () => {
   assert.ok(elapsed < 500, `took ${Math.round(elapsed)} ms`);
 });
 
-test('a link labelled with a web address points at that address', () => {
+test('a link whose label holds an address points at that address', () => {
   for (const link of links(testing)) {
     assert.ok(!labelMismatch(link), `label and target differ for [${link.label}](${link.href})`);
   }
 });
 
-test('the label check flags a web address label that names another destination', () => {
+test('the label check flags an address in a label that names another destination', () => {
   const page = 'https://agentpwn.com/attacks/mcp-exploitation/3';
   const flagged = [
     'agentpwn.com/attacks/mcp-exploitation/2',
     'evil.example',
+    'cdn.evil-2.example',
+    'evil.example:8080/x',
+    'evil.example?x=1',
+    'evil.io#x',
     'www.evil.example',
+    'WWW.EVIL.EXAMPLE',
     'See www.evil.example',
     'https://evil.example',
+    'mailto:security@evil.example',
+    'agentpwn.com/attacks/mcp-exploitation/3 or https://evil.example',
   ];
   for (const label of flagged) {
     assert.ok(labelMismatch({ label, href: page }), `not flagged: [${label}]`);
   }
-  const matching = ['agentpwn.com/attacks/mcp-exploitation/3', page, 'MCP exploitation', '3. Input Validation and Sanitization'];
-  for (const label of matching) {
-    assert.ok(!labelMismatch({ label, href: page }), `flagged: [${label}]`);
+  const matching = [
+    ...[
+      'agentpwn.com/attacks/mcp-exploitation/3',
+      page,
+      `Test: ${page}`,
+      'MCP exploitation',
+      'Tests',
+      '3. Input Validation and Sanitization',
+      // A dotted name followed by a space or other text, or after other text, reads as a name.
+      'Node.js guide',
+      'Node.js: a guide',
+      'evil.example is bad',
+      'evil.example, test 3',
+      'Built on Node.js',
+      'i.e',
+    ].map((label) => ({ label, href: page })),
+    // A file name reads like a domain; it matches a target written the same way.
+    { label: 'SECURITY.md', href: 'SECURITY.md' },
+    { label: 'mcp-audit.json', href: 'mcp-audit.json' },
+  ];
+  for (const link of matching) {
+    assert.ok(!labelMismatch(link), `flagged: [${link.label}](${link.href})`);
   }
 });
 
