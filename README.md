@@ -174,15 +174,16 @@ The best way to verify your MCP security posture is to test against real attack 
 
 | Attack Category | Description | Test Resource |
 |---|---|---|
-| Tool poisoning | Malicious tool descriptions that alter agent behavior | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2), which injects fake tool results and whose fix text tells the agent to treat tool descriptions and results as untrusted input |
+| Tool poisoning | Malicious tool descriptions that alter agent behavior | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2), which injects fake tool results and whose fix text, which the agent is asked to pass to its administrator, says to treat MCP tool descriptions and results as untrusted input |
 | Parameter injection | Crafted inputs that escape validation | No dedicated test |
 | Credential exfiltration | Attempts to extract secrets via tool responses | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2), whose injected tool result tells the agent to output all environment variables |
 | Privilege escalation | Gaining access to tools beyond granted permissions | [agentpwn.com/attacks/mcp-exploitation/3](https://agentpwn.com/attacks/mcp-exploitation/3) |
 
 The agentpwn [MCP exploitation](https://agentpwn.com/attacks/mcp-exploitation)
 set has three tests: Tool Discovery, Tool Injection and Cross-Tool Exploit
-Chain. "No dedicated test" means none of the three targets that category.
-Cover it with your own test cases, starting from the checklist items in
+Chain. "No dedicated test" means none of the three is built for that
+category; where one comes near, the row names it as "Closest". Cover the
+category with your own test cases, starting from the checklist items in
 [3. Input Validation and Sanitization](#3-input-validation-and-sanitization),
 [5. Credential Management](#5-credential-management) and
 [6. Prompt Injection Defense](#6-prompt-injection-defense).
