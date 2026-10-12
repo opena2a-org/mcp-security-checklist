@@ -17,6 +17,7 @@ const TEST_PAGE = /^https:\/\/agentpwn\.com\/attacks\/[a-z0-9-]+\/\d+\/?$/;
 const GUIDES_LINK = '](https://agentpwn.com/tools)';
 const TESTING = /\btest(?:ing|s)?\b/i;
 const LIST_ITEM = /^\s*(?:[-*+]|\d+\.) /;
+const HEADING = /^ {0,3}#{1,6}(?:\s|$)/;
 
 // Each list item in the text with its lead-in: the last sentence of the nearest
 // paragraph or heading above the list.
@@ -24,15 +25,27 @@ function listItems(text) {
   const items = [];
   let paragraph = [];
   let leadIn = '';
+  let current = null;
   for (const line of text.split('\n')) {
     const item = LIST_ITEM.test(line);
-    if (!item && line.trim() !== '') {
+    const blank = line.trim() === '';
+    // A non-blank line right after a list item continues that item, unless it is
+    // an item or a heading itself.
+    if (current && !item && !blank && !HEADING.test(line)) {
+      current.item += ` ${line.trim()}`;
+      continue;
+    }
+    current = null;
+    if (!item && !blank) {
       paragraph.push(line.trim());
       continue;
     }
     if (paragraph.length > 0) leadIn = paragraph.join(' ').split(/(?<=[.:!?]) /).at(-1);
     paragraph = [];
-    if (item) items.push({ item: line.trim(), leadIn });
+    if (item) {
+      current = { item: line.trim(), leadIn };
+      items.push(current);
+    }
   }
   return items;
 }
@@ -71,6 +84,11 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   assert.deepEqual(guidesListedAsTesting(`${testing}\n\n${honeypot}\n${guides}\n`), [
     `For safe, controlled testing environments: ${guides}`,
   ]);
+  // The continuation line of a wrapped list item belongs to that item, not to a new lead-in.
+  const wrapped = '- [agentpwn.com](https://agentpwn.com) -- honeypot environment for testing agent\n  security tools';
+  assert.deepEqual(guidesListedAsTesting(`${testing}\n\n${wrapped}\n${guides}\n`), [
+    `For safe, controlled testing environments: ${guides}`,
+  ]);
   // The lead-in is the sentence that introduces the list, not the paragraph before it.
   const reading = 'We encourage security testing of MCP deployments. For written guidance:';
   assert.deepEqual(guidesListedAsTesting(`${reading}\n${guides}\n`), []);
@@ -78,6 +96,10 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   const sections = `## Security Testing\n\n${honeypot}\n\n## Further Reading\n\n${guides}\n`;
   assert.deepEqual(guidesListedAsTesting(sections), []);
   assert.deepEqual(guidesListedAsTesting(`## Security Testing\n\n${honeypot}\n${guides}\n`), [
+    `## Security Testing ${guides}`,
+  ]);
+  // A heading right after a list item is not part of that item.
+  assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n## Security Testing\n${guides}\n`), [
     `## Security Testing ${guides}`,
   ]);
 });
