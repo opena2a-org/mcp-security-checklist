@@ -35,8 +35,24 @@ const HTML_TAGS =
   'track|ul';
 // A complete open or closing tag alone on its line: a tag name and, in an open tag, any
 // number of attributes, each a name with an optional value that is unquoted or quoted.
-const ATTRIBUTE = `[ \\t]+[a-z_:][\\w.:-]*(?:[ \\t]*=[ \\t]*(?:[^\\x00-\\x20"'=<>\`]+|'[^']*'|"[^"]*"))?`;
-const LONE_TAG = new RegExp(`^ {0,3}(?:<[a-z][a-z\\d-]*(?:${ATTRIBUTE})*[ \\t]*/?>|</[a-z][a-z\\d-]*[ \\t]*>)[ \\t]*$`, 'i');
+const CLOSING_TAG = /^ {0,3}<\/[a-z][a-z\d-]*[ \t]*>[ \t]*$/i;
+const OPEN_TAG_NAME = /^ {0,3}<[a-z][a-z\d-]*/i;
+const ATTRIBUTE = /[ \t]+[a-z_:][\w.:-]*(?:[ \t]*=[ \t]*(?:[^\x00-\x20"'=<>`]+|'[^']*'|"[^"]*"))?/iy;
+const OPEN_TAG_END = /[ \t]*\/?>[ \t]*$/y;
+// The attributes of an open tag are read one at a time. One pattern for the whole tag keeps
+// a place to go back to for each attribute, and throws a RangeError on a line that has
+// about a million of them. A line is tested against it as against a pattern.
+const LONE_TAG = {
+  test(line) {
+    if (CLOSING_TAG.test(line)) return true;
+    const name = OPEN_TAG_NAME.exec(line);
+    if (!name) return false;
+    let end = name[0].length;
+    for (ATTRIBUTE.lastIndex = end; ATTRIBUTE.test(line); ) end = ATTRIBUTE.lastIndex;
+    OPEN_TAG_END.lastIndex = end;
+    return OPEN_TAG_END.test(line);
+  },
+};
 // An HTML block opens with a raw text tag, a comment, a processing instruction, a
 // declaration, a CDATA section, one of the block-level tags or any other tag alone on its
 // line, not with an autolink or a tag that has text after it. Each kind is paired with the
@@ -53,6 +69,23 @@ const HTML_BLOCKS = [
   [LONE_TAG, /^\s*$/, true],
 ];
 
+// The part of a line where a tab sets the structure of a block: the indent of the line
+// and the gap between a list marker and its text.
+const TAB_STRUCTURE = /^[ \t]*(?:(?:[-*+]|\d+\.)[ \t]+)?/;
+
+// The line with each tab in that part written as the spaces up to the next multiple of
+// four columns, which is how CommonMark reads it. A tab further into the line is text.
+function expandTabs(line) {
+  const [structure] = TAB_STRUCTURE.exec(line);
+  let added = 0;
+  const spaced = structure.replace(/\t/g, (tab, index) => {
+    const width = 4 - ((index + added) % 4);
+    added += width - 1;
+    return ' '.repeat(width);
+  });
+  return spaced + line.slice(structure.length);
+}
+
 // The last sentence of a paragraph or heading.
 const lastSentence = (text) => text.split(/(?<=[.:!?]) /).at(-1);
 
@@ -63,16 +96,18 @@ const lastSentence = (text) => text.split(/(?<=[.:!?]) /).at(-1);
 const SPACE_REFERENCE =
   /&(?:Tab;|NewLine;|nbsp;?|NonBreakingSpace;|ensp;|emsp;|emsp13;|emsp14;|numsp;|puncsp;|thinsp;|ThinSpace;|hairsp;|VeryThinSpace;|MediumSpace;|ThickSpace;)/y;
 const NUMERIC_REFERENCE = /&#(?:[xX]([\da-fA-F]+)|(\d+));?/y;
-// A comment, a processing instruction and a CDATA section, each with the marker it ends at.
-// A browser hides a CDATA section in any letter case, so the markers are matched in any case.
-const MARKED = [['<!--', '-->'], ['<?', '?>'], ['<![CDATA[', ']]>']];
+// The markup a page hides up to an end marker, each with that marker. A comment ends at
+// -->. A processing instruction, a declaration and a CDATA section in any letter case end
+// at their first >: a page reads a CDATA section as one only inside SVG or MathML, and
+// anywhere else as a comment that the first > ends.
+const MARKED = [['<!--', '-->'], ['<?', '>'], ['<!', '>']];
 // The = of an attribute and the quote that opens its value.
 const QUOTED_VALUE = /=\s*(["'])/y;
 
 // Where the part of an HTML block that starts at index i and shows no text ends, or -1
 // when what starts there shows. White space shows none, written as itself or as a
-// character reference, and nor does markup: a comment, processing instruction or CDATA
-// section, up to its end marker, a declaration up to its first >, and a tag up to its first
+// character reference, and nor does markup: a comment up to its end marker, a processing
+// instruction, declaration or CDATA section up to its first >, and a tag up to its first
 // > outside a quoted attribute value. Markup that has no end is text.
 function hiddenEnd(html, i) {
   if (/\s/.test(html[i])) return i + 1;
@@ -86,17 +121,12 @@ function hiddenEnd(html, i) {
     const space = code > 0 && code <= 0x10ffff && /\s/.test(String.fromCodePoint(code));
     return space ? NUMERIC_REFERENCE.lastIndex : -1;
   }
-  const marked = MARKED.find(([open]) => html.slice(i, i + open.length).toUpperCase() === open);
+  const marked = MARKED.find(([open]) => html.startsWith(open, i));
   if (marked) {
     const end = html.indexOf(marked[1], i + marked[0].length);
     return end === -1 ? -1 : end + marked[1].length;
   }
-  const start = html.slice(i, i + 3);
-  if (/^<![a-z]/i.test(start)) {
-    const end = html.indexOf('>', i);
-    return end === -1 ? -1 : end + 1;
-  }
-  if (!/^<\/?[a-z]/i.test(start)) return -1;
+  if (!/^<\/?[a-z]/i.test(html.slice(i, i + 3))) return -1;
   for (let j = i + 1; j < html.length; j++) {
     if (html[j] === '>') return j + 1;
     QUOTED_VALUE.lastIndex = j;
@@ -157,7 +187,7 @@ function listItems(text) {
     items.push(entry);
     lazy = true;
   };
-  for (const line of text.split('\n')) {
+  for (const line of text.split('\n').map(expandTabs)) {
     const blank = line.trim() === '';
     const indent = line.search(/\S/);
     // How many of the open items the line is inside: those whose text it is indented to.
@@ -410,8 +440,8 @@ test('the lead-in check flags a guides entry in a list of testing environments',
     const text = `${reading}\n\n${honeypot}\n${open}\n${environments}\n\n${guides}\n${close}\n`;
     assert.deepEqual(guidesListedAsTesting(text), [], `the block ends before ${close}`);
   }
-  // A comment, a processing instruction and a CDATA section end only at their own end
-  // marker, not at the > of a tag, and a raw text block only at its own closing tag.
+  // The HTML block of a comment, a processing instruction or a CDATA section ends only at
+  // its own end marker, not at the > of a tag, and a raw text block only at its own closing tag.
   for (const [open, close] of [['<!--', '-->'], ['<?x', '?>'], ['<![CDATA[', ']]>'], ['<pre>', '</pre>']]) {
     const text = `${environments}\n\n${open}\n<b>testing</b>\n${guides}\n${close}\n`;
     assert.deepEqual(guidesListedAsTesting(text), [], `the block ends before ${close}`);
@@ -535,6 +565,59 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   }
 });
 
+test('the lead-in check reads a tab as the spaces up to the next multiple of four columns', () => {
+  const guides = '- [agentpwn.com/tools](https://agentpwn.com/tools) -- security guides for AI tools and MCP servers';
+  const honeypot = '- [agentpwn.com](https://agentpwn.com) -- honeypot environment';
+  const environments = 'For safe, controlled testing environments:';
+  // A tab, alone or after one to three spaces, indents a line to column 4. That is inside an
+  // item whose text starts at column 2, so the entry is in a list nested in that item.
+  for (const indent of ['\t', ' \t', '  \t', '   \t']) {
+    const text = `${environments}\n\n${honeypot}\n${indent}${guides}\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [`${environments} ${guides}`], `indented with ${JSON.stringify(indent)}`);
+  }
+  // Two tabs indent it to column 8, four columns or more past the item's text, so it opens
+  // no list item and goes on the paragraph of the item.
+  assert.deepEqual(guidesListedAsTesting(`${environments}\n\n${honeypot}\n\t\t${guides}\n`), [
+    `${environments} ${honeypot} ${guides}`,
+  ]);
+  // Where no paragraph is open, a line indented with a tab is code, not a lead-in.
+  assert.deepEqual(guidesListedAsTesting(`For written guidance:\n\n\tTesting environments:\n${guides}\n`), []);
+  // A tab between a list marker and its text is read the same way: the line is a list item
+  // whose text starts at column 4.
+  const tabbed = listItems(`${environments}\n\n-\t[agentpwn.com/tools](https://agentpwn.com/tools)\n`);
+  assert.deepEqual(tabbed.map(({ leadIn, column }) => ({ leadIn, column })), [{ leadIn: environments, column: 4 }]);
+  assert.equal(guidesListedAsTesting(`${environments}\n\n-\t[agentpwn.com/tools](https://agentpwn.com/tools)\n`).length, 1);
+  // A tab further into a line is text and is left as it is.
+  assert.deepEqual(listItems('- a\tb\n').map(({ item }) => item), ['- a\tb']);
+});
+
+test('the lead-in check reads a long run of tabs in linear time', () => {
+  for (const indent of ['\t'.repeat(200000), ' \t'.repeat(100000), `-${'\t'.repeat(200000)}`]) {
+    const start = performance.now();
+    assert.equal(listItems(`${indent}x\n`).length, indent.startsWith('-') ? 1 : 0);
+    const elapsed = performance.now() - start;
+    assert.ok(elapsed < 1000, `${JSON.stringify(indent.slice(0, 4))}... took ${Math.round(elapsed)} ms`);
+  }
+});
+
+test('the HTML text check ends a processing instruction, a declaration and a CDATA section at the first >', () => {
+  // A page hides each of them up to its first >, so what follows that > shows.
+  for (const html of ['<![CDATA[a>b]]>', '<![cdata[a>b]]>', '<?x a>b?>', '<!DOCTYPE a>b>', '<!a>b']) {
+    assert.equal(showsText(html), true, `${html} shows no text`);
+  }
+  // One whose first > is its last character shows no text.
+  for (const html of ['<![CDATA[x]]>', '<![cdata[x]]>', '<?x ?>', '<!DOCTYPE html>', '<!>']) {
+    assert.equal(showsText(html), false, `${html} shows text`);
+  }
+  // Only a comment written as one runs past a > to its own end marker.
+  assert.equal(showsText('<!-- a>b -->'), false);
+  // The HTML block of a CDATA section still runs to the line that holds ]]>, and the text
+  // after the first > of the section introduces the list below the block.
+  const environments = 'For safe, controlled testing environments:';
+  const guides = '- [agentpwn.com/tools](https://agentpwn.com/tools) -- security guides for AI tools and MCP servers';
+  assert.deepEqual(guidesListedAsTesting(`${environments}\n\n<![CDATA[a>\nFor written guidance:]]>\n\n${guides}\n`), []);
+});
+
 test('the HTML text check reads a long run of unterminated markup in linear time', () => {
   for (const markup of ['<a', '<!a', '</a', '<?', '<!--', '<![CDATA[', '<a b="']) {
     // An odd count leaves the last quoted value of '<a b="' with no closing quote.
@@ -553,13 +636,26 @@ test('the code-fence pattern reads a long run of backticks in linear time', () =
   assert.ok(elapsed < 1000, `took ${Math.round(elapsed)} ms`);
 });
 
-test('the lone-tag pattern reads a long run of attributes or white space in linear time', () => {
+test('the lone-tag check reads a long run of attributes or white space in linear time', () => {
   for (const html of [`<a${' b=c'.repeat(50000)}!`, `<a${' '.repeat(200000)}!`, `<a b=${'/'.repeat(200000)}`]) {
     const start = performance.now();
     assert.equal(LONE_TAG.test(html), false);
     const elapsed = performance.now() - start;
     assert.ok(elapsed < 1000, `${html.slice(0, 8)}... took ${Math.round(elapsed)} ms`);
   }
+});
+
+test('the lone-tag check reads a tag with a million attributes', () => {
+  const attributes = ' b=c'.repeat(1000000);
+  assert.equal(LONE_TAG.test(`<a${attributes}>`), true);
+  assert.equal(LONE_TAG.test(`<a${attributes}`), false);
+});
+
+test('the lone-tag check accepts a complete tag alone on its line and nothing else', () => {
+  const tags = ['<a>', '<a/>', '<a />', '<a b>', '<a b=c>', '<a b=c/>', '<a b=/>', '<a b = "c>d" e=\'f\' g>', '</a>', '</a >', '   <A B=C>  ', '<x-y a:b.c-d="">'];
+  for (const tag of tags) assert.equal(LONE_TAG.test(tag), true, `${tag} is not read as a lone tag`);
+  const others = ['<a', '<a b=>', '<a b="c>', '<a b="c"d>', '<a b=c d="e>', '<a> x', '<ab=c>', '</a b>', '</a/>', '    <a>', '<1>', '< a>', 'x <a>'];
+  for (const other of others) assert.equal(LONE_TAG.test(other), false, `${other} is read as a lone tag`);
 });
 
 test('mcp-audit.json does not name agentpwn.com/tools as a testing resource', () => {
