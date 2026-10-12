@@ -53,6 +53,24 @@ function section(heading) {
   return readme.slice(start, next === -1 ? undefined : next);
 }
 
+// A "### " checklist section, up to the next heading of level 2 or 3. A "# " line in a
+// code block is a shell comment, not a heading, so it does not end the section.
+function subsection(heading) {
+  const start = readme.indexOf(`\n### ${heading}\n`) + 1;
+  assert.notEqual(start, 0, `README has no "### ${heading}" section`);
+  const next = readme.slice(start + 1).search(/\n#{2,3} /);
+  return readme.slice(start, next === -1 ? undefined : start + 1 + next);
+}
+
+// Each blockquote note in the text, its lines joined with spaces and the "> " removed.
+function notes(text) {
+  return text
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter((block) => block.startsWith('>'))
+    .map((block) => block.split('\n').map((line) => line.replace(/^\s*>\s?/, '')).join(' '));
+}
+
 function links(text) {
   return [...text.matchAll(LINK)].map(([, image, label, angled, plain]) => ({
     image: image === '!',
@@ -157,6 +175,15 @@ test('every row links a specific test or states that none exists', () => {
     .map((row) => ({ category: row.category, problem: resourceProblem(row.resource) }))
     .filter(({ problem }) => problem !== null);
   assert.deepEqual(offenders, [], 'rows whose Test Resource cell is not a known agentpwn test link or "No dedicated test"');
+});
+
+test('the input validation section does not offer an agentpwn link as an input validation test while the table lists none', () => {
+  const row = rows.find(({ category }) => category === 'Parameter injection');
+  assert.ok(row, 'no "Parameter injection" row under "Testing Your Defenses"');
+  if (links(row.resource).some(({ href }) => isKnownTest(href))) return;
+  const claims = notes(subsection('3. Input Validation and Sanitization'))
+    .filter((note) => note.includes('agentpwn.com') && /input validation/i.test(note));
+  assert.deepEqual(claims, [], 'notes that offer an agentpwn link as an input validation test, though "Parameter injection" has no dedicated test');
 });
 
 test('the resource check rejects every link that is not a known test', () => {

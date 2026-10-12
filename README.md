@@ -84,7 +84,9 @@ with its `command` and `args`) to bring MCP into the audit.
 - [ ] Numeric parameters have reasonable bounds
 - [ ] Recursive or self-referencing inputs rejected
 
-> Test your MCP input validation against known attack patterns:
+> The agentpwn MCP exploitation tests send no crafted parameters to an MCP
+> server, so cover the items above with your own test cases. They test whether
+> an agent follows instructions hidden in content:
 > https://agentpwn.com/attacks/mcp-exploitation
 
 ### 4. Tool Sandboxing
