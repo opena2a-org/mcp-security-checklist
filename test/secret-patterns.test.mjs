@@ -239,6 +239,11 @@ test('the README says where a key has to start and how to find one that does not
   );
   assert.match(
     text,
+    /an Arabic-Indic digit matches in JavaScript and not in Python/,
+    'the section does not say that JavaScript finds a key after a non-ASCII letter or digit and Python does not',
+  );
+  assert.match(
+    text,
     /A key that only the prefix patterns can find, one not stored under a credential name, is also missed/,
     'the section does not limit the escape case to keys the prefix patterns alone can find',
   );
