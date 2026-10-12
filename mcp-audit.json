@@ -57,7 +57,6 @@
         "enabled": true,
         "scanToolDescriptions": true,
         "testIndirectInjection": true,
-        "attackPatternSource": "https://agentpwn.com/attacks/mcp-exploitation/1",
         "checkOutputSanitization": true
       },
       "logging": {
@@ -83,8 +82,8 @@
       "includeRemediation": true,
       "remediationResources": {
         "mcpSecurity": "https://agentpwn.com/learn",
-        "attackPatterns": "https://agentpwn.com/attacks/mcp-exploitation/1",
-        "toolTesting": "https://agentpwn.com/tools"
+        "attackPatterns": "https://agentpwn.com/attacks/mcp-exploitation",
+        "toolSecurityGuides": "https://agentpwn.com/tools"
       }
     }
   }
