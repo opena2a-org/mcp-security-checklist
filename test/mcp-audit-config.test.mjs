@@ -273,8 +273,13 @@ function checkStemlessKnownParagraph(section) {
   ];
   assert.equal(endings.length, SECTION_SENTENCES.length, 'a known paragraph or list item has no ending to add the sentence after');
   for (const ending of endings) {
-    const added = section.replace(ending, `${ending}\n${connect}`);
-    assert.notEqual(added, section, `the section has no "${ending}" to add a sentence after`);
+    // The sentence goes after the ending where it ends a paragraph or list item: before a
+    // blank line, the next list item or the end of the section, where paragraphs() splits
+    // them, and not where it is inside a paragraph inserted elsewhere in the section.
+    const escaped = ending.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const end = new RegExp(`${escaped}(?=[ \\t]*(?:\\n\\s*\\n|\\n- |\\s*$))`);
+    const added = section.replace(end, (text) => `${text}\n${connect}`);
+    assert.notEqual(added, section, `the section has no paragraph or list item that ends with "${ending}" to add a sentence after`);
     const index = known.findIndex((paragraph) => paragraph.join(' ').endsWith(ending));
     assert.notEqual(index, -1, `no paragraph or list item of the section ends with "${ending}"`);
     const read = sectionSentences(added);
@@ -297,6 +302,8 @@ test('the known-paragraph stem-less check leaves a paragraph inserted elsewhere 
   for (const inserted of [
     'The audit runs each check group in the order listed.',
     'A client and server negotiate the revision during initialization.',
+    // A known ending inside the inserted paragraph does not end a paragraph there.
+    'The audit lists what They match: below.',
   ]) {
     const section = auditSection().replace(link, `${link}\n\n${inserted}`);
     assert.ok(paragraphs(section).includes(inserted), `"${inserted}" is not read as a paragraph of its own`);
