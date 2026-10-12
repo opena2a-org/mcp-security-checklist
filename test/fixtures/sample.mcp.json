@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "search": {
+      "command": "node",
+      "args": ["./search-server.js"],
+      "env": {
+        "API_KEY": "FAKE-KEY-1234",
+        "SEARCH_REGION": "eu-west-1"
+      }
+    },
+    "github": {
+      "command": "node",
+      "args": ["./github-server.js"],
+      "env": {
+        "GITHUB_TOKEN": "not-a-real-token"
+      }
+    },
+    "weather": {
+      "command": "node",
+      "args": ["./weather-server.js"],
+      "env": {
+        "API_KEY": "${WEATHER_API_KEY}"
+      }
+    }
+  }
+}

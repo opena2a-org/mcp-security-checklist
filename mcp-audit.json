@@ -47,10 +47,10 @@
         "checkEnvVarUsage": true,
         "checkCredentialRotation": true,
         "secretPatterns": [
-          "(?i)(api[_-]?key|secret|token|password|credential)\\s*[:=]\\s*['\"][^'\"]+['\"]",
-          "(?i)(sk-[a-zA-Z0-9]{20,})",
-          "(?i)(ghp_[a-zA-Z0-9]{36})",
-          "(?i)(AKIA[A-Z0-9]{16})"
+          "([Aa][Pp][Ii][_\\-]?[Kk][Ee][Yy]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll])['\"]?\\s*[:=]\\s*['\"](\\$[^\\{'\"]|[^$'\"])[^'\"]*['\"]",
+          "\\b(sk-[A-Za-z0-9_\\-]{20,})",
+          "\\b(gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82})",
+          "\\b((AKIA|ASIA)[A-Z0-9]{16})"
         ]
       },
       "promptInjection": {

@@ -176,6 +176,24 @@ client and server negotiate during initialization. The example uses
 implements, as listed in the
 [MCP versioning page](https://modelcontextprotocol.io/specification/versioning).
 
+The `secretPatterns` under `checks.credentials` back the checklist item "No
+credentials stored in MCP configuration files". They match:
+
+- a quoted value stored under a name that ends in `api_key`, `api-key`,
+  `apikey`, `secret`, `token`, `password` or `credential`, in any letter case,
+  as in the `"env": {"API_KEY": "..."}` block of a `.mcp.json`. A value that
+  starts with `${` refers to an environment variable and does not match.
+- keys that start with `sk-` (including `sk-proj-` and `sk-ant-`), GitHub
+  tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) and AWS access
+  key IDs (`AKIA`, `ASIA`).
+
+A credential with no known prefix that sits under another name, or in `args`,
+is not matched; extend the list for the names your servers use. The patterns
+carry no inline flags, lookarounds or backreferences, so JavaScript and Python
+compile them as written. Match them case-sensitively.
+`test/secret-patterns.test.mjs` runs each pattern against fake credentials
+(`node --test`).
+
 ## Testing Your Defenses
 
 The best way to verify your MCP security posture is to test against real attack patterns.
