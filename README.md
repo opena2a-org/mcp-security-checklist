@@ -158,17 +158,36 @@ with its `command` and `args`) to bring MCP into the audit.
 
 `mcp-audit.json` is a reference configuration that enumerates the checks a
 thorough MCP audit should automate. It is illustrative, not consumed by a
-tool shipped from this repository:
+tool shipped from this repository. This excerpt keeps every check group and
+leaves out most of their settings:
 
 ```json
 {
-  "target": "https://your-mcp-server.example.com",
-  "checks": ["transport", "auth", "input-validation", "sandboxing", "credentials"],
-  "reportFormat": "sarif"
+  "version": "1.0.0",
+  "audit": {
+    "target": {
+      "url": "https://your-mcp-server.example.com",
+      "transport": "streamable-http"
+    },
+    "checks": {
+      "transport": { "enabled": true, "requireTls13": true },
+      "authentication": { "enabled": true, "requireTokenAuth": true },
+      "inputValidation": { "enabled": true, "requireJsonSchemaValidation": true },
+      "sandboxing": { "enabled": true, "checkContainerIsolation": true },
+      "credentials": { "enabled": true, "scanConfigForSecrets": true },
+      "promptInjection": { "enabled": true, "scanToolDescriptions": true },
+      "logging": { "enabled": true, "checkAuditLogging": true },
+      "network": { "enabled": true, "checkRateLimiting": true }
+    },
+    "reporting": {
+      "format": "sarif",
+      "severityThreshold": "medium"
+    }
+  }
 }
 ```
 
-See [mcp-audit.json](./mcp-audit.json) for a complete example configuration.
+See [mcp-audit.json](./mcp-audit.json) for the complete configuration.
 In it, `target.protocolVersion` names the MCP revision under audit. MCP
 identifies each revision by its date (`YYYY-MM-DD`), and that string is what a
 client and server negotiate during initialization. The example uses
