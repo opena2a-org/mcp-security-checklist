@@ -3,7 +3,7 @@
   "audit": {
     "target": {
       "url": "https://your-mcp-server.example.com",
-      "protocol": "mcp-v1",
+      "protocolVersion": "2026-07-28",
       "transport": "streamable-http"
     },
     "checks": {

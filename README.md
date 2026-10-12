@@ -167,6 +167,12 @@ tool shipped from this repository:
 ```
 
 See [mcp-audit.json](./mcp-audit.json) for a complete example configuration.
+In it, `target.protocolVersion` names the MCP revision under audit. MCP
+identifies each revision by its date (`YYYY-MM-DD`), and that string is what a
+client and server negotiate during initialization. The example uses
+`2026-07-28`, the current revision; set it to the revision your server
+implements, as listed in the
+[MCP versioning page](https://modelcontextprotocol.io/specification/versioning).
 
 ## Testing Your Defenses
 
