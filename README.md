@@ -207,16 +207,22 @@ credentials stored in MCP configuration files". They match:
 - keys that start with `sk-` (including `sk-proj-` and `sk-ant-`), GitHub
   tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) and AWS access
   key IDs (`AKIA`, `ASIA`). The prefix has to start a word: a key that directly
-  follows a letter, a digit or an underscore does not match. This keeps a word
-  that only ends in a prefix, such as `task-` or `disk-`, from being read as
-  the start of an `sk-` key.
+  follows an ASCII letter, digit or underscore does not match. This keeps a
+  word that only ends in a prefix, such as `task-` or `disk-`, from being read
+  as the start of an `sk-` key. Python's `re` also counts other Unicode letters
+  and digits unless the pattern is compiled with `re.ASCII`, so a key right
+  after `é`, a Cyrillic letter or an Arabic-Indic digit matches in JavaScript
+  and not in Python.
 
 A credential with no known prefix that sits under another name, or in `args`,
-is not matched; extend the list for the names your servers use. A key is also
-missed when an escape or an encoded character puts a letter or a digit right
-before it: in the file text `"line1\nsk-..."` the key follows the `n` of `\n`,
-and in `?q=key%3Dsk-...` it follows the `D` of `%3D`. To find such a key, run
-the patterns on the decoded text: the parsed JSON string or the decoded URL.
+is not matched; extend the list for the names your servers use. A key that
+only the prefix patterns can find, one not stored under a credential name, is
+also missed when an escape or an encoded character puts a letter or a digit
+right before it: in the file text `"line1\nsk-..."` the key follows the `n` of
+`\n`, and in `?q=key%3Dsk-...` it follows the `D` of `%3D`. Under a credential
+name the key is still found, as in `{"API_KEY":"line1\nsk-..."}`. To find such
+a key, run the patterns on the decoded text: the parsed JSON string or the
+decoded URL.
 The patterns carry no inline flags, lookarounds or backreferences, so
 JavaScript and Python compile them as written. Match them case-sensitively.
 `test/secret-patterns.test.mjs` runs each pattern against fake credentials
