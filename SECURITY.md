@@ -2,7 +2,7 @@
 
 ## Reporting Vulnerabilities
 
-If you discover a security vulnerability in the MCP Security Checklist tooling or audit scripts, please report it responsibly.
+If you discover a security vulnerability in the MCP Security Checklist text, its reference configuration or the configuration's schema, please report it responsibly.
 
 **Do NOT open a public issue for security vulnerabilities.**
 
@@ -16,9 +16,11 @@ If you discover a security vulnerability in the MCP Security Checklist tooling o
 ### Scope
 
 This policy covers:
-- The `mcp-audit.json` configuration schema and processing
-- Any scripts or tooling provided in this repository
-- Documentation accuracy (security advice that is itself insecure)
+- The checklist text in `README.md`, including documentation accuracy (security advice that is itself insecure)
+- The reference configuration `mcp-audit.json`, including its `secretPatterns` (for example, a pattern that misses a credential format the README says it matches)
+- The configuration's schema, `mcp-audit.schema.json`
+
+The repository ships no audit tool or script. The tests under `test/` check the files above.
 
 ### Out of Scope
 

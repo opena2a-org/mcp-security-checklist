@@ -65,6 +65,11 @@ const SECTION_SENTENCES = [
   ],
   PROTOCOL_VERSION_SENTENCES,
   [
+    '[mcp-audit.schema.json](./mcp-audit.schema.json) is a JSON Schema (draft 2020-12) for the configuration: every key, its type and its allowed values.',
+    'Validate your copy against it to catch a misspelled key or a value of the wrong type; the schema allows a `$schema` key, so the copy can name the schema for an editor that validates JSON.',
+    '`test/mcp-audit-schema.test.mjs` (`node --test`) validates `mcp-audit.json` and the excerpt above against the schema.',
+  ],
+  [
     'The `secretPatterns` under `checks.credentials` back the checklist item "No credentials stored in MCP configuration files".',
     'They match:',
   ],
@@ -266,6 +271,7 @@ function checkStemlessKnownParagraph(section) {
   const endings = [
     'leaves out most of their settings:',
     '[MCP versioning page](https://modelcontextprotocol.io/specification/versioning).',
+    'against the schema.',
     'They match:',
     'refers to an environment variable and does not match.',
     'and not in Python.',

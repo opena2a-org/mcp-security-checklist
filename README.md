@@ -9,7 +9,8 @@ MCP enables AI assistants to interact with external tools and data sources. This
 ## Quick Start
 
 This repository is the checklist itself (below) plus a reference audit
-configuration ([mcp-audit.json](./mcp-audit.json)). Work through the checklist
+configuration ([mcp-audit.json](./mcp-audit.json)) and its schema
+([mcp-audit.schema.json](./mcp-audit.schema.json)). Work through the checklist
 against your MCP deployment. For an automated scan of an MCP server project,
 use HackMyAgent:
 
@@ -196,6 +197,14 @@ client and server agree on it in the `initialize` handshake. The example uses
 `2026-07-28`, the current revision; set it to the revision your server
 implements, as listed in the
 [MCP versioning page](https://modelcontextprotocol.io/specification/versioning).
+
+[mcp-audit.schema.json](./mcp-audit.schema.json) is a JSON Schema (draft
+2020-12) for the configuration: every key, its type and its allowed values.
+Validate your copy against it to catch a misspelled key or a value of the
+wrong type; the schema allows a `$schema` key, so the copy can name the schema
+for an editor that validates JSON. `test/mcp-audit-schema.test.mjs`
+(`node --test`) validates `mcp-audit.json` and the excerpt above
+against the schema.
 
 The `secretPatterns` under `checks.credentials` back the checklist item "No
 credentials stored in MCP configuration files". They match:
