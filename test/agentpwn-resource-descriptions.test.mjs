@@ -24,6 +24,8 @@ const THEMATIC_BREAK = /^ {0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/;
 // A backtick fence has no backtick after it. The lookahead takes the whole run of fence
 // characters at once, so that check runs once per line and not once per backtick.
 const FENCE = /^ {0,3}(?=(`{3,}|~{3,}))\1(?!(?<=`).*`)/;
+// The line that closes a fence: a run of its character at least as long as its opener.
+const closingFence = ([, opener]) => new RegExp(`^ {0,3}${opener[0]}{${opener.length},}[ \\t]*$`);
 const BLOCK_QUOTE = /^ {0,3}>/;
 const HTML_TAGS =
   'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|' +
@@ -46,10 +48,66 @@ const HTML_BLOCKS = [
 // The last sentence of a paragraph or heading.
 const lastSentence = (text) => text.split(/(?<=[.:!?]) /).at(-1);
 
-// Whether an HTML block shows any text on the page. Its tags, comments, processing
-// instructions, declarations and CDATA sections show none.
-const showsText = (html) =>
-  /\S/.test(html.replace(/<!--.*?-->|<\?.*?\?>|<!\[CDATA\[.*?\]\]>|<![a-z][^>]*>|<\/?[a-z][^>]*>/gi, ''));
+// The named character references that stand for white space. A numeric reference stands
+// for the code point it gives, and every other named reference for a character that shows.
+const SPACE_REFERENCE =
+  /&(?:Tab;|NewLine;|nbsp;?|NonBreakingSpace;|ensp;|emsp;|emsp13;|emsp14;|numsp;|puncsp;|thinsp;|ThinSpace;|hairsp;|VeryThinSpace;|MediumSpace;|ThickSpace;)/y;
+const NUMERIC_REFERENCE = /&#(?:[xX]([\da-fA-F]+)|(\d+));?/y;
+// A comment, a processing instruction and a CDATA section, each with the marker it ends at.
+const MARKED = [['<!--', '-->'], ['<?', '?>'], ['<![CDATA[', ']]>']];
+// The = of an attribute and the quote that opens its value.
+const QUOTED_VALUE = /=\s*(["'])/y;
+
+// Where the part of an HTML block that starts at index i and shows no text ends, or -1
+// when what starts there shows. White space shows none, written as itself or as a
+// character reference, and nor does markup: a comment, processing instruction or CDATA
+// section, up to its end marker, a declaration up to its first >, and a tag up to its first
+// > outside a quoted attribute value. Markup that has no end is text.
+function hiddenEnd(html, i) {
+  if (/\s/.test(html[i])) return i + 1;
+  SPACE_REFERENCE.lastIndex = i;
+  if (SPACE_REFERENCE.test(html)) return SPACE_REFERENCE.lastIndex;
+  NUMERIC_REFERENCE.lastIndex = i;
+  const numeric = NUMERIC_REFERENCE.exec(html);
+  if (numeric) {
+    const code = numeric[1] ? parseInt(numeric[1], 16) : parseInt(numeric[2], 10);
+    // A reference to 0 or past the last code point stands for U+FFFD, which shows.
+    const space = code > 0 && code <= 0x10ffff && /\s/.test(String.fromCodePoint(code));
+    return space ? NUMERIC_REFERENCE.lastIndex : -1;
+  }
+  const marked = MARKED.find(([open]) => html.startsWith(open, i));
+  if (marked) {
+    const end = html.indexOf(marked[1], i + marked[0].length);
+    return end === -1 ? -1 : end + marked[1].length;
+  }
+  const start = html.slice(i, i + 3);
+  if (/^<![a-z]/i.test(start)) {
+    const end = html.indexOf('>', i);
+    return end === -1 ? -1 : end + 1;
+  }
+  if (!/^<\/?[a-z]/i.test(start)) return -1;
+  for (let j = i + 1; j < html.length; j++) {
+    if (html[j] === '>') return j + 1;
+    QUOTED_VALUE.lastIndex = j;
+    const value = QUOTED_VALUE.exec(html);
+    if (value) {
+      j = html.indexOf(value[1], QUOTED_VALUE.lastIndex);
+      if (j === -1) return -1;
+    }
+  }
+  return -1;
+}
+
+// Whether an HTML block shows any text on the page. It is read once from left to right,
+// and stops at the first part that shows, so that no position is read again from each
+// later one when a long run of markup has no end.
+function showsText(html) {
+  for (let i = 0; i < html.length; ) {
+    i = hiddenEnd(html, i);
+    if (i === -1) return true;
+  }
+  return false;
+}
 
 // Each list item in the text with its lead-in: the last sentence of the nearest
 // paragraph, heading or HTML block that shows text above the list.
@@ -59,7 +117,9 @@ function listItems(text) {
   let leadIn = '';
   let current = null;
   let column = 0;
-  let afterBlank = false;
+  // Whether the item ends with a paragraph, which a line left of the item's text can go on
+  // lazily. A blank line or any other block ends it.
+  let lazy = false;
   let fence = null;
   let html = null;
   let raw = [];
@@ -74,49 +134,67 @@ function listItems(text) {
     raw = [];
   };
   for (const line of text.split('\n')) {
+    const blank = line.trim() === '';
+    const indent = line.search(/\S/);
+    // A code fence or HTML block inside a list item ends with the item, at the first line
+    // that is neither blank nor indented to the item's text.
+    if (current && (fence || html) && !blank && indent < column) {
+      fence = null;
+      html = null;
+      current = null;
+    }
+    // A line inside a list item is read from the item's text on.
+    const content = current && indent >= column ? line.slice(column) : line;
     // The lines of a fenced code block are code, up to the fence that closes it.
     if (fence) {
-      if (fence.test(line)) fence = null;
+      if (fence.test(content)) fence = null;
       continue;
     }
-    const blank = line.trim() === '';
     // The lines of an HTML block are raw HTML, not list items or headings, up to the
     // line the block ends on. A blank line inside a raw text block or a comment is part
-    // of it.
+    // of it. The text of a block inside a list item is not a lead-in.
     if (html) {
-      if (!blank) raw.push(line.trim());
-      if (html.test(line)) {
+      if (!blank && !current) raw.push(line.trim());
+      if (html.test(content)) {
         html = null;
         endHtml();
       }
       continue;
     }
     // A thematic break written with spaces (- - -) is not a list item.
-    const rule = THEMATIC_BREAK.test(line);
+    const rule = THEMATIC_BREAK.test(content);
     const item = !rule && LIST_ITEM.test(line);
-    const heading = HEADING.test(line);
-    const opener = FENCE.exec(line);
-    const htmlBlock = HTML_BLOCKS.find(([start]) => start.test(line));
+    const heading = HEADING.test(content);
+    const opener = FENCE.exec(content);
+    const htmlBlock = HTML_BLOCKS.find(([start]) => start.test(content));
     // A line left of the item's text that opens one of those blocks ends the item;
     // the same line indented to the item's text is inside the item.
-    const block = heading || rule || opener || BLOCK_QUOTE.test(line) || htmlBlock;
-    const indent = line.search(/\S/);
+    const block = heading || rule || opener || BLOCK_QUOTE.test(content) || htmlBlock;
     // A blank line does not end a list item: the item goes on at the next line that is
     // indented to its text.
     if (current && blank) {
-      afterBlank = true;
+      lazy = false;
       continue;
     }
-    // A non-blank line right after a list item continues that item, unless it is
-    // an item itself, or it opens a block outside the item. After a blank line, only a
-    // line indented to the item's text is inside the item.
-    if (current && !item && (afterBlank ? indent >= column : !(block && indent < column))) {
-      current.item += ` ${line.trim()}`;
-      afterBlank = false;
-      continue;
+    if (current && !item) {
+      // A line indented to the item's text is inside the item, and so is a code fence or
+      // HTML block it opens. The lines of those are not the item's text.
+      if (indent >= column) {
+        if (opener) fence = closingFence(opener);
+        else if (htmlBlock) html = htmlBlock[1].test(content) ? null : htmlBlock[1];
+        else if (!rule) current.item += ` ${line.trim()}`;
+        lazy = !(heading || rule || opener || htmlBlock);
+        continue;
+      }
+      // A line left of it goes on lazily while the item ends with a paragraph, unless it
+      // opens a block outside the item.
+      if (lazy && !block) {
+        current.item += ` ${line.trim()}`;
+        continue;
+      }
     }
     current = null;
-    if (opener) fence = new RegExp(`^ {0,3}${opener[1][0]}{${opener[1].length},}[ \\t]*$`);
+    if (opener) fence = closingFence(opener);
     // An HTML block ends the paragraph above it, and runs to the line its end marker is on.
     if (htmlBlock) {
       endParagraph();
@@ -140,7 +218,7 @@ function listItems(text) {
     endParagraph();
     if (item) {
       current = { item: line.trim(), leadIn };
-      afterBlank = false;
+      lazy = true;
       // The text of an item starts after its marker and one to four spaces.
       const [, marker, gap] = /^(\s*(?:[-*+]|\d+\.))( {1,4}(?=\S))?/.exec(line);
       column = marker.length + (gap ? gap.length : 1);
@@ -330,6 +408,47 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   }
   // Left of the item's text, it ends the list and introduces the list below it.
   assert.deepEqual(guidesListedAsTesting(`${environments}\n\n${honeypot}\n\nMore about the honeypot.\n${guides}\n`), []);
+  // A code fence or HTML block indented to the item's text opens inside the item, with or
+  // without a blank line above it, and the lines in it are code or raw HTML, not list items.
+  for (const gap of ['\n', '']) {
+    for (const [open, close] of [['```md', '```'], ['<!--', '-->']]) {
+      const text = `${environments}\n\n${honeypot}\n${gap}  ${open}\n  ${guides}\n  ${close}\n`;
+      assert.deepEqual(guidesListedAsTesting(text), [], `${open} does not open inside the item`);
+    }
+  }
+  // Only a paragraph goes on lazily without the item's indent. After a code fence, heading,
+  // thematic break or HTML block inside the item, a line left of its text ends the list, and
+  // the sentence written there introduces the list below it.
+  for (const gap of ['\n', '']) {
+    for (const block of ['```\n  x\n  ```', '## Notes', '* * *', '<!-- note -->', '<p>x</p>']) {
+      const text = `${reading}\n\n${honeypot}\n${gap}  ${block}\nTesting environments:\n${guides}\n`;
+      assert.deepEqual(guidesListedAsTesting(text), [`Testing environments: ${guides}`], `the item runs past ${block}`);
+    }
+  }
+  // The line that ends a multi-line HTML block is part of the block, not a paragraph below it.
+  assert.deepEqual(guidesListedAsTesting(`${reading}\n\n<pre>\ntesting\n</pre>\n${guides}\n`), [
+    `<pre> testing </pre> ${guides}`,
+  ]);
+  // A character reference for white space shows no text, and nor does a > inside a quoted
+  // attribute value, so neither hides the lead-in above it.
+  for (const html of ['<p>&nbsp;</p>', '<p>&#xA0;&#32;&ensp;&Tab;</p>', '<div title="a>b">', "<div title='a>b'>"]) {
+    const text = `${environments}\n\n${html}\n\n${guides}\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [`${environments} ${guides}`], `${html} hides the lead-in`);
+  }
+  // A character reference for a character that shows is text.
+  for (const html of ['<p>&amp;</p>', '<p>&#65;</p>', '<p>&#0;</p>']) {
+    assert.deepEqual(guidesListedAsTesting(`${environments}\n\n${html}\n\n${guides}\n`), [], `${html} shows no text`);
+  }
+});
+
+test('the HTML text check reads a long run of unterminated markup in linear time', () => {
+  for (const markup of ['<a', '<!a', '</a', '<?', '<!--', '<![CDATA[', '<a b="']) {
+    const html = markup.repeat(Math.ceil(200000 / markup.length));
+    const start = performance.now();
+    assert.equal(showsText(html), true, markup);
+    const elapsed = performance.now() - start;
+    assert.ok(elapsed < 1000, `${markup} took ${Math.round(elapsed)} ms`);
+  }
 });
 
 test('the code-fence pattern reads a long run of backticks in linear time', () => {
