@@ -452,6 +452,23 @@ test('the address check flags a wrong address in a link, a bare URL, an HTML tag
   assert.deepEqual(wronglyFlagged, [], 'texts that hold no wrong address but are flagged');
 });
 
+// The agentpwn learn page is a single guide to AI agent security with one section per
+// attack category, MCP exploitation among them. It has no lessons, exercises or quizzes.
+const LEARN_PAGE = 'https://agentpwn.com/learn';
+// Words that would present the page as a course.
+const COURSE_CLAIM = /\b(?:course|interactive|lessons?|exercises?|quiz(?:zes)?|fundamentals)\b/i;
+
+test('the Learning Resources entry for the agentpwn learn page describes a guide, not a course', () => {
+  const entries = section('Learning Resources')
+    .split('\n')
+    .filter((line) => links(line).some(({ href }) => href === LEARN_PAGE));
+  assert.equal(entries.length, 1, `expected one Learning Resources entry linking ${LEARN_PAGE}`);
+  const [entry] = entries;
+  assert.doesNotMatch(entry, COURSE_CLAIM, `entry describes the page as a course: ${entry}`);
+  assert.match(entry, /\bguide\b/i, `entry does not name the page as a guide: ${entry}`);
+  assert.match(entry, /\bMCP exploitation\b/i, `entry does not say where the MCP material is: ${entry}`);
+});
+
 test('in-page links resolve to a README heading', () => {
   const anchors = new Set([...readme.matchAll(/^#{1,6} (.+)$/gm)].map(([, heading]) => slug(heading)));
   for (const { label, href } of links(readme)) {
