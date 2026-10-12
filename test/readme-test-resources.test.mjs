@@ -1,4 +1,4 @@
-// Checks the "Testing Your Defenses" table in README.md.
+// Checks the "Testing Your Defenses" table and the links in README.md.
 // Run from the repository root: node --test
 
 import { test } from 'node:test';
@@ -32,6 +32,19 @@ const ADDRESS_WORD = /:\/\/|www\.|mailto:|^[a-z0-9.-]+\.[a-z]{2,}(?:[/?#]|:\d)/i
 // A domain with nothing after it is an address only when it is the whole label; next to
 // other text it reads as a name ("Node.js guide", "Built on Node.js").
 const BARE_DOMAIN = /^[a-z0-9.-]+\.[a-z]{2,}$/i;
+// Resources whose address this check knows: the label each is linked under, where it
+// lives, and an address that must not be given for it. oasb.org, with any subdomain,
+// belongs to an unrelated organization. The Agent Threat Matrix is in the
+// opena2a-standards account; the same repository name under opena2a-org only redirects
+// there. A longer domain or repository name is a different one and is not matched.
+const KNOWN_HOMES = [
+  { label: 'OASB Standard', home: 'https://oasb.ai', wrong: /(?<![\w-])oasb\.org(?!\.?[\w-])/i },
+  {
+    label: 'Agent Threat Matrix',
+    home: 'https://github.com/opena2a-standards/agent-threat-matrix',
+    wrong: /(?<![\w-])github\.com\/opena2a-org\/agent-threat-matrix(?![\w-])/i,
+  },
+];
 
 function section(heading) {
   const start = readme.indexOf(`## ${heading}\n`);
@@ -85,6 +98,18 @@ function labelAddresses(label) {
 function labelMismatch({ label, href }) {
   return labelAddresses(label).some(({ written, address }) =>
     ![written, address].some((form) => [form, `https://${form}`, `./${form}`].includes(href)));
+}
+
+// True when a link labelled with a known resource's name points anywhere but its home.
+function wrongHome({ label, href }) {
+  const known = KNOWN_HOMES.find((resource) => resource.label === label);
+  return known !== undefined && href !== known.home;
+}
+
+// Returns the known resources a text gives a wrong address for, wherever the address is:
+// in a link, a bare URL, an HTML tag or plain text.
+function wrongAddresses(text) {
+  return KNOWN_HOMES.filter(({ wrong }) => wrong.test(text)).map(({ label }) => label);
 }
 
 // Splits a table row on the pipes GitHub treats as cell borders; "\|" stays in its cell.
@@ -333,6 +358,71 @@ test('the label check flags an address in a label that names another destination
   ];
   const wronglyFlagged = matching.filter((link) => labelMismatch(link));
   assert.deepEqual(wronglyFlagged, [], 'links whose label matches the target but are flagged');
+});
+
+test('a link labelled with a known resource points at where that resource lives', () => {
+  const resources = links(section('Learning Resources'));
+  for (const { label } of KNOWN_HOMES) {
+    assert.ok(resources.some((link) => link.label === label), `"Learning Resources" has no [${label}] link`);
+  }
+  const offenders = links(readme).filter(wrongHome).map(({ label, href }) => `[${label}](${href})`);
+  assert.deepEqual(offenders, [], 'links to a known resource that do not point at its home');
+});
+
+test('the README gives no wrong address for a known resource', () => {
+  assert.deepEqual(wrongAddresses(readme), [], 'resources named at an address they are not at');
+});
+
+test('the home check flags a known resource linked anywhere but its home', () => {
+  const oasb = 'https://oasb.ai';
+  const matrix = 'https://github.com/opena2a-standards/agent-threat-matrix';
+  const flagged = [
+    { label: 'OASB Standard', href: 'https://oasb.org' },
+    { label: 'OASB Standard', href: 'http://oasb.ai' },
+    { label: 'OASB Standard', href: 'https://oasb.ai.evil.example' },
+    { label: 'OASB Standard', href: matrix },
+    { label: 'Agent Threat Matrix', href: 'https://github.com/opena2a-org/agent-threat-matrix' },
+    { label: 'Agent Threat Matrix', href: oasb },
+  ];
+  const notFlagged = flagged.filter((link) => !wrongHome(link));
+  assert.deepEqual(notFlagged, [], 'links that miss the home of a known resource but are not flagged');
+  const matching = [
+    { label: 'OASB Standard', href: oasb },
+    { label: 'Agent Threat Matrix', href: matrix },
+    // A label that names no known resource is not checked here.
+    { label: 'MCP Security Fundamentals', href: 'https://agentpwn.com/learn' },
+  ];
+  const wronglyFlagged = matching.filter((link) => wrongHome(link));
+  assert.deepEqual(wronglyFlagged, [], 'links that point at the home of a known resource but are flagged');
+});
+
+test('the address check flags a wrong address in a link, a bare URL, an HTML tag or plain text', () => {
+  const former = 'https://github.com/opena2a-org/agent-threat-matrix';
+  const flagged = [
+    '[OASB](https://oasb.org)',
+    '[OASB](https://www.oasb.org/stages)',
+    '<https://OASB.org>',
+    'See oasb.org.',
+    `[Agent Threat Matrix](${former})`,
+    `[matrix]: ${former}`,
+    `<a href="${former}/issues">issues</a>`,
+    `${former}.git`,
+    'https://www.github.com/OpenA2A-org/Agent-Threat-Matrix',
+  ];
+  const notFlagged = flagged.filter((text) => wrongAddresses(text).length === 0);
+  assert.deepEqual(notFlagged, [], 'texts that hold a wrong address but are not flagged');
+  const other = [
+    ...KNOWN_HOMES.map(({ label, home }) => `[${label}](${home})`),
+    'https://github.com/opena2a-org/hackmyagent',
+    // A longer domain or repository name is a different one.
+    `${former}-tools`,
+    'https://myoasb.org',
+    'https://not-oasb.org',
+    'https://oasb.org.uk',
+    'https://oasb.organic',
+  ];
+  const wronglyFlagged = other.filter((text) => wrongAddresses(text).length > 0);
+  assert.deepEqual(wronglyFlagged, [], 'texts that hold no wrong address but are flagged');
 });
 
 test('in-page links resolve to a README heading', () => {
