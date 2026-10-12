@@ -472,6 +472,42 @@ test('the Learning Resources entry for the agentpwn learn page describes a guide
   assert.match(entry, /\bMCP exploitation\b/i, `entry does not say where the MCP material is: ${entry}`);
 });
 
+// mcp-servers.org and agent-docs.io are each one page whose links lead to agentpwn.com
+// and which carries a block addressed to AI agents. Neither is a directory of MCP servers
+// or a documentation hub. A longer domain is a different one and is not matched.
+const SINGLE_TEST_PAGES = /(?<![\w-])(?:mcp-servers\.org|agent-docs\.io)(?!\.?[\w-])/i;
+
+test('Learning Resources does not list mcp-servers.org or agent-docs.io', () => {
+  const entries = section('Learning Resources')
+    .split('\n')
+    .filter((line) => SINGLE_TEST_PAGES.test(line));
+  assert.deepEqual(entries, [], 'Learning Resources entries that point at a single test page');
+});
+
+test('the single test page check finds the site in a link, a bare URL, an autolink or an HTML tag', () => {
+  const flagged = [
+    '- [MCP Server Registry](https://mcp-servers.org) -- directory of MCP servers',
+    '- [Agent Documentation Hub](https://agent-docs.io/) -- documentation hub',
+    'https://www.mcp-servers.org/servers',
+    '<https://AGENT-DOCS.IO>',
+    '<a href="https://agent-docs.io/context">guides</a>',
+    '[docs]: https://agent-docs.io',
+    'See mcp-servers.org.',
+  ];
+  const notFlagged = flagged.filter((text) => !SINGLE_TEST_PAGES.test(text));
+  assert.deepEqual(notFlagged, [], 'texts that name a single test page but are not flagged');
+  const other = [
+    'https://not-mcp-servers.org',
+    'https://mcp-servers.org.uk',
+    'https://mcp-servers.organic',
+    'https://my-agent-docs.io',
+    'https://agent-docs.iox',
+    'https://github.com/opena2a-org/mcp-security-checklist',
+  ];
+  const wronglyFlagged = other.filter((text) => SINGLE_TEST_PAGES.test(text));
+  assert.deepEqual(wronglyFlagged, [], 'texts that name another site but are flagged');
+});
+
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // Returns the path of every key in the excerpt that is missing from the full
