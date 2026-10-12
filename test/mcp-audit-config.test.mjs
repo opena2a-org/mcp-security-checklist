@@ -278,6 +278,15 @@ test('the stem-less paragraph check leaves an unscoped handshake sentence elsewh
   assert.doesNotThrow(() => checkStemlessHandshakeParagraph(section));
 });
 
+// Matches an ending where it ends a paragraph or list item: before a blank line, the next
+// list item or the end of the section, where paragraphs() splits them, and not where it is
+// inside a paragraph inserted elsewhere in the section. Each of the two alternatives reads
+// the white space after the ending once, so a long run of it is read in linear time.
+function paragraphEnd(ending) {
+  const escaped = ending.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`${escaped}(?=[ \\t]*\\n(?:\\s*\\n|- )|\\s*$)`);
+}
+
 // Adds a handshake sentence that uses none of the three word stems to the end of each
 // paragraph and list item the section is known to have, and checks that the section check
 // flags it there. Each ending is matched to the paragraph or list item it ends, not to its
@@ -304,12 +313,7 @@ function checkStemlessKnownParagraph(section) {
   ];
   assert.equal(endings.length, SECTION_SENTENCES.length, 'a known paragraph or list item has no ending to add the sentence after');
   for (const ending of endings) {
-    // The sentence goes after the ending where it ends a paragraph or list item: before a
-    // blank line, the next list item or the end of the section, where paragraphs() splits
-    // them, and not where it is inside a paragraph inserted elsewhere in the section.
-    const escaped = ending.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const end = new RegExp(`${escaped}(?=[ \\t]*(?:\\n\\s*\\n|\\n- |\\s*$))`);
-    const added = section.replace(end, (text) => `${text}\n${connect}`);
+    const added = section.replace(paragraphEnd(ending), (text) => `${text}\n${connect}`);
     assert.notEqual(added, section, `the section has no paragraph or list item that ends with "${ending}" to add a sentence after`);
     const index = known.findIndex((paragraph) => paragraph.join(' ').endsWith(ending));
     assert.notEqual(index, -1, `no paragraph or list item of the section ends with "${ending}"`);
@@ -341,6 +345,23 @@ test('the known-paragraph stem-less check leaves a paragraph inserted elsewhere 
     assert.notDeepEqual(sectionSentences(section), SECTION_SENTENCES);
     assert.doesNotThrow(() => checkStemlessKnownParagraph(section));
   }
+});
+
+test('the known-paragraph ending pattern matches an ending before a blank line, a list item or the end of the section', () => {
+  const end = paragraphEnd('They match:');
+  for (const after of ['', '\n', ' \t', '  \n', '\n  ', '\n\nNext.', ' \n \nNext.', '\n- next']) {
+    assert.ok(end.test(`They match:${after}`), `no match before ${JSON.stringify(after)}`);
+  }
+  for (const after of [' below.', '\nNext.', '  y', '\n-next']) {
+    assert.equal(end.test(`They match:${after}`), false, `a match before ${JSON.stringify(after)}`);
+  }
+});
+
+test('the known-paragraph ending pattern reads a long run of white space in linear time', () => {
+  const start = performance.now();
+  assert.equal(paragraphEnd('They match:').test(`x They match:${' '.repeat(100000)}y`), false);
+  const elapsed = performance.now() - start;
+  assert.ok(elapsed < 1000, `took ${Math.round(elapsed)} ms`);
 });
 
 test('the handshake check flags a sentence that gives every revision an initialize handshake', () => {
