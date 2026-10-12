@@ -204,6 +204,12 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n<p>${environments}</p>\n\n${guides}\n`), [
     `<p>${environments}</p> ${guides}`,
   ]);
+  // A raw text tag, a comment, a processing instruction, a declaration and a CDATA section
+  // open an HTML block as well, so each one ends the list when it is left of the item's text.
+  for (const html of ['<pre>x</pre>', '<!-- note -->', '<?x ?>', '<!DOCTYPE html>', '<![CDATA[x]]>']) {
+    const text = `${environments}\n\n${honeypot}\n${html}\n${guides}\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [], `the list runs past ${html}`);
+  }
   // A block left of the item's text ends the item, which is at column 4 after a marker
   // and three spaces.
   assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypotAt4}\n  > ${environments}\n${guides}\n`), [
@@ -212,6 +218,10 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   // An inline tag does not open an HTML block, so it continues the item.
   const link = '<a href="https://example.com">testing</a>';
   assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n${link}\n${guides}\n`), []);
+  // The entry below it is then in the same list, under the lead-in of that list.
+  assert.deepEqual(guidesListedAsTesting(`${environments}\n\n${honeypot}\n${link}\n${guides}\n`), [
+    `${environments} ${guides}`,
+  ]);
   // Nor does a tag indented by four spaces, even when that is left of the item's text.
   const honeypotAt5 = '-    [agentpwn.com](https://agentpwn.com) -- honeypot environment';
   assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypotAt5}\n    <p>${environments}</p>\n\n${guides}\n`), []);
@@ -235,6 +245,15 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   ]);
   // A block indented to the text of a list item is inside that item.
   assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n  > used for testing\n${guides}\n`), []);
+  // So is a thematic break or a code fence, with the line written below it.
+  for (const block of ['* * *', '```sh\n  npm test\n  ```']) {
+    const text = `${reading}\n\n${honeypot}\n  ${block}\n  used for testing\n${guides}\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [], `${block} ends the item`);
+  }
+  // So is an HTML block, and the entry below it is in the same list.
+  assert.deepEqual(guidesListedAsTesting(`${environments}\n\n${honeypot}\n  <p>x</p>\n${guides}\n`), [
+    `${environments} ${guides}`,
+  ]);
 });
 
 test('the code-fence pattern reads a long run of backticks in linear time', () => {
