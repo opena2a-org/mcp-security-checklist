@@ -31,7 +31,7 @@ This policy covers:
 We encourage security testing of MCP deployments. For safe, controlled testing environments:
 
 - [agentpwn.com](https://agentpwn.com) -- honeypot environment for testing agent security tools
-- [agentpwn.com/tools](https://agentpwn.com/tools) -- curated security testing tools for MCP and A2A
+- [agentpwn.com/tools](https://agentpwn.com/tools) -- security guides for AI tools and MCP servers
 - [HackMyAgent](https://hackmyagent.com) -- automated agent security scanning
 
 ## Supported Versions
