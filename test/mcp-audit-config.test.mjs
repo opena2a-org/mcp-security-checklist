@@ -179,8 +179,12 @@ test('the README section has only the paragraphs and list items it is known to h
   assert.deepEqual(paragraphOpenings(auditSection()), SECTION_OPENINGS);
 });
 
-test('the section check flags a handshake sentence without the three word stems in a paragraph or list item of its own', () => {
-  const section = auditSection();
+// Adds a handshake sentence that uses none of the three word stems to the section, as a
+// paragraph and as a list item of its own, and checks that the section check flags it and
+// the handshake filter does not. The filter is tested on the added sentence alone, so that
+// an unscoped handshake sentence elsewhere in the section is left to the handshake check
+// to report.
+function checkStemlessHandshakeParagraph(section) {
   const connect = 'A client and server agree on it when they connect.';
   const link = '[MCP versioning page](https://modelcontextprotocol.io/specification/versioning).';
   const credential = '\n\nA credential with no known prefix';
@@ -190,18 +194,30 @@ test('the section check flags a handshake sentence without the three word stems 
     // A third item in the list of what the secretPatterns match.
     { anchor: credential, replacement: `\n- ${connect}${credential}`, paragraph: `- ${connect}` },
   ];
+  assert.equal(
+    HANDSHAKE.test(connect),
+    false,
+    'the handshake filter now matches a sentence without its three word stems; update the HANDSHAKE comment',
+  );
   for (const { anchor, replacement, paragraph } of additions) {
     const added = section.replace(anchor, replacement);
     assert.notEqual(added, section, `the section has no "${anchor.trim()}" to add a paragraph next to`);
-    assert.deepEqual(
-      unscopedHandshakeSentences(added),
-      [],
-      'the handshake filter now matches a sentence without its three word stems; update the HANDSHAKE comment',
-    );
     assert.deepEqual(protocolVersionSentences(added), PROTOCOL_VERSION_SENTENCES);
     assert.ok(paragraphOpenings(added).includes(paragraph), `"${paragraph}" is not read as a paragraph of its own`);
     assert.notDeepEqual(paragraphOpenings(added), SECTION_OPENINGS);
   }
+}
+
+test('the section check flags a handshake sentence without the three word stems in a paragraph or list item of its own', () => {
+  checkStemlessHandshakeParagraph(auditSection());
+});
+
+test('the stem-less paragraph check leaves an unscoped handshake sentence elsewhere in the section to the handshake check', () => {
+  const unscoped = 'A client and server negotiate the revision during initialization.';
+  const link = '[MCP versioning page](https://modelcontextprotocol.io/specification/versioning).';
+  const section = auditSection().replace(link, `${link}\n\n${unscoped}`);
+  assert.ok(unscopedHandshakeSentences(section).includes(unscoped));
+  assert.doesNotThrow(() => checkStemlessHandshakeParagraph(section));
 });
 
 test('the handshake check flags a sentence that gives every revision an initialize handshake', () => {
