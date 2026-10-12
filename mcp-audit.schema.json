@@ -58,6 +58,7 @@
                 "enabled": { "type": "boolean" },
                 "requireTls13": { "type": "boolean" },
                 "requireHsts": { "type": "boolean" },
+                "certificatePinning": { "type": "boolean" },
                 "checkCertificateExpiry": { "type": "boolean" },
                 "minimumCertValidityDays": {
                   "description": "Fewest days a certificate may have left before it is reported.",
@@ -171,6 +172,30 @@
                 "checkCorsConfig": { "type": "boolean" },
                 "checkDnsRebinding": { "type": "boolean" },
                 "maxRequestsPerMinute": { "$ref": "#/$defs/positiveInteger" }
+              }
+            },
+            "supplyChain": {
+              "type": "object",
+              "required": ["enabled"],
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "checkPinnedDependencies": { "type": "boolean" },
+                "checkDependencyAudit": { "type": "boolean" },
+                "scanContainerImages": { "type": "boolean" },
+                "requireSbom": { "type": "boolean" },
+                "checkDependencyUpdateAutomation": { "type": "boolean" }
+              }
+            },
+            "incidentResponse": {
+              "type": "object",
+              "required": ["enabled"],
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "checkToolKillSwitch": { "type": "boolean" },
+                "checkServerKillSwitch": { "type": "boolean" },
+                "checkCredentialRevocation": { "type": "boolean" }
               }
             }
           }

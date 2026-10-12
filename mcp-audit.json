@@ -11,6 +11,7 @@
         "enabled": true,
         "requireTls13": true,
         "requireHsts": true,
+        "certificatePinning": true,
         "checkCertificateExpiry": true,
         "minimumCertValidityDays": 30
       },
@@ -19,7 +20,7 @@
         "requireTokenAuth": true,
         "maxTokenLifetimeSeconds": 3600,
         "checkOAuthConfig": true,
-        "requireMtlsForServerToServer": false
+        "requireMtlsForServerToServer": true
       },
       "inputValidation": {
         "enabled": true,
@@ -73,6 +74,20 @@
         "checkCorsConfig": true,
         "checkDnsRebinding": true,
         "maxRequestsPerMinute": 60
+      },
+      "supplyChain": {
+        "enabled": true,
+        "checkPinnedDependencies": true,
+        "checkDependencyAudit": true,
+        "scanContainerImages": true,
+        "requireSbom": true,
+        "checkDependencyUpdateAutomation": true
+      },
+      "incidentResponse": {
+        "enabled": true,
+        "checkToolKillSwitch": true,
+        "checkServerKillSwitch": true,
+        "checkCredentialRevocation": true
       }
     },
     "reporting": {
