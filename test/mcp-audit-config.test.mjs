@@ -34,8 +34,8 @@ function auditSection() {
 // A sentence that names the handshake with one of three word stems: "initiali[sz]"
 // (initialize, initialization), "handshake" or "negotiat" (negotiate, negotiation).
 // A sentence that says the same in other words, such as "they agree on it when they
-// connect", does not match; the checks below catch one in the protocolVersion paragraph
-// or in a paragraph or list item of its own.
+// connect", does not match; the section check below catches one wherever it is added,
+// in a paragraph or list item the section is known to have or in one of its own.
 const HANDSHAKE = /initiali[sz]|handshake|negotiat/i;
 // The scope such a sentence has to carry: the last revision that has the handshake,
 // with or without code quotes, "and earlier".
@@ -53,16 +53,40 @@ const PROTOCOL_VERSION_SENTENCES = [
   'The example uses `2026-07-28`, the current revision; set it to the revision your server implements, as listed in the [MCP versioning page](https://modelcontextprotocol.io/specification/versioning).',
 ];
 
-// How each paragraph and list item of the section starts, in order. A paragraph or list
-// item that is not on this list, such as one with a handshake sentence that uses none of
-// the three word stems, fails the section check.
-const SECTION_OPENINGS = [
-  '`mcp-audit.json` is a reference configuration',
-  'See [mcp-audit.json](./mcp-audit.json) for the complete configuration.',
-  'The `secretPatterns` under `checks.credentials`',
-  '- a quoted value stored under a name',
-  '- keys that start with `sk-`',
-  'A credential with no known prefix',
+// Each paragraph and list item of the section, in order and sentence by sentence. Each is
+// compared whole: a sentence added to one of them, such as a handshake sentence that uses
+// none of the three word stems, fails the section check, and so does a paragraph or list
+// item that is not on this list.
+const SECTION_SENTENCES = [
+  [
+    '`mcp-audit.json` is a reference configuration that enumerates the checks a thorough MCP audit should automate.',
+    'It is illustrative, not consumed by a tool shipped from this repository.',
+    'This excerpt keeps every check group and leaves out most of their settings:',
+  ],
+  PROTOCOL_VERSION_SENTENCES,
+  [
+    'The `secretPatterns` under `checks.credentials` back the checklist item "No credentials stored in MCP configuration files".',
+    'They match:',
+  ],
+  [
+    '- a quoted value stored under a name that ends in `api_key`, `api-key`, `apikey`, `secret`, `token`, `password` or `credential`, in any letter case, as in the `"env": {"API_KEY": "..."}` block of a `.mcp.json`.',
+    'A value that starts with `${` refers to an environment variable and does not match.',
+  ],
+  [
+    '- keys that start with `sk-` (including `sk-proj-` and `sk-ant-`), GitHub tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) and AWS access key IDs (`AKIA`, `ASIA`).',
+    'The prefix has to start a word: a key that directly follows an ASCII letter, digit or underscore does not match.',
+    'This keeps a word that only ends in a prefix, such as `task-` or `disk-`, from being read as the start of an `sk-` key.',
+    "Python's `re` also counts other Unicode letters and digits unless the pattern is compiled with `re.ASCII`, so a key right after `é`, a Cyrillic letter or an Arabic-Indic digit matches in JavaScript and not in Python.",
+  ],
+  [
+    'A credential with no known prefix that sits under another name, or in `args`, is not matched; extend the list for the names your servers use.',
+    'A key that only the prefix patterns can find, one not stored under a credential name, is also missed when an escape or an encoded character puts a letter or a digit right before it: in the file text `"line1\\nsk-..."` the key follows the `n` of `\\n`, and in `?q=key%3Dsk-...` it follows the `D` of `%3D`.',
+    'Under a credential name the key is still found, as in `{"API_KEY":"line1\\nsk-..."}`.',
+    'To find such a key, run the patterns on the decoded text: the parsed JSON string or the decoded URL.',
+    'The patterns carry no inline flags, lookarounds or backreferences, so JavaScript and Python compile them as written.',
+    'Match them case-sensitively.',
+    '`test/secret-patterns.test.mjs` runs each pattern against fake credentials (`node --test`).',
+  ],
 ];
 
 function sentences(text) {
@@ -81,12 +105,9 @@ function paragraphs(text) {
     .filter(Boolean);
 }
 
-// Returns the opening of each paragraph and list item that starts with a known one, and
-// any other paragraph or list item whole.
-function paragraphOpenings(text) {
-  return paragraphs(text).map(
-    (paragraph) => SECTION_OPENINGS.find((opening) => paragraph.startsWith(opening)) ?? paragraph,
-  );
+// Returns the sentences of each paragraph and list item of the section.
+function sectionSentences(text) {
+  return paragraphs(text).map((paragraph) => sentences(paragraph));
 }
 
 // Returns the sentences about the handshake that do not limit it to the last revision
@@ -182,8 +203,8 @@ test('the paragraph split drops a first line only when it is the section heading
   assert.deepEqual(paragraphs(`## Reference Audit Configuration\n${sentence}`), [sentence]);
 });
 
-test('the README section has only the paragraphs and list items it is known to have', () => {
-  assert.deepEqual(paragraphOpenings(auditSection()), SECTION_OPENINGS);
+test('the README section has only the paragraphs, list items and sentences it is known to have', () => {
+  assert.deepEqual(sectionSentences(auditSection()), SECTION_SENTENCES);
 });
 
 // Adds a handshake sentence that uses none of the three word stems to the section, as a
@@ -210,8 +231,8 @@ function checkStemlessHandshakeParagraph(section) {
     const added = section.replace(anchor, replacement);
     assert.notEqual(added, section, `the section has no "${anchor.trim()}" to add a paragraph next to`);
     assert.deepEqual(protocolVersionSentences(added), PROTOCOL_VERSION_SENTENCES);
-    assert.ok(paragraphOpenings(added).includes(paragraph), `"${paragraph}" is not read as a paragraph of its own`);
-    assert.notDeepEqual(paragraphOpenings(added), SECTION_OPENINGS);
+    assert.ok(paragraphs(added).includes(paragraph), `"${paragraph}" is not read as a paragraph of its own`);
+    assert.notDeepEqual(sectionSentences(added), SECTION_SENTENCES);
   }
 }
 
@@ -225,6 +246,40 @@ test('the stem-less paragraph check leaves an unscoped handshake sentence elsewh
   const section = auditSection().replace(link, `${link}\n\n${unscoped}`);
   assert.ok(unscopedHandshakeSentences(section).includes(unscoped));
   assert.doesNotThrow(() => checkStemlessHandshakeParagraph(section));
+});
+
+test('the section check flags a handshake sentence without the three word stems added to a paragraph or list item it knows', () => {
+  const section = auditSection();
+  const known = sectionSentences(section);
+  const connect = 'A client and server agree on it when they connect.';
+  assert.equal(
+    HANDSHAKE.test(connect),
+    false,
+    'the handshake filter now matches a sentence without its three word stems; update the HANDSHAKE comment',
+  );
+  // How each paragraph and list item of the section ends in the README, in order. The
+  // sentence is added on a new line after each.
+  const endings = [
+    'leaves out most of their settings:',
+    '[MCP versioning page](https://modelcontextprotocol.io/specification/versioning).',
+    'They match:',
+    'refers to an environment variable and does not match.',
+    'and not in Python.',
+    '(`node --test`).',
+  ];
+  assert.equal(endings.length, SECTION_SENTENCES.length, 'a known paragraph or list item has no ending to add the sentence after');
+  endings.forEach((ending, index) => {
+    const added = section.replace(ending, `${ending}\n${connect}`);
+    assert.notEqual(added, section, `the section has no "${ending}" to add a sentence after`);
+    const read = sectionSentences(added);
+    assert.equal(read.length, known.length, `"${connect}" after "${ending}" is read as a paragraph of its own`);
+    assert.equal(
+      read[index].join(' '),
+      `${known[index].join(' ')} ${connect}`,
+      `"${connect}" after "${ending}" is not read as the end of paragraph or list item ${index + 1}`,
+    );
+    assert.notDeepEqual(read, SECTION_SENTENCES);
+  });
 });
 
 test('the handshake check flags a sentence that gives every revision an initialize handshake', () => {
