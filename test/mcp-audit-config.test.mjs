@@ -129,6 +129,16 @@ function protocolVersionSentences(text) {
   return sentences(paragraph);
 }
 
+// Returns the revision that the paragraph naming `target.protocolVersion` says the
+// example uses, from its sentence "The example uses `YYYY-MM-DD`".
+function exampleRevision(text) {
+  const sentence = protocolVersionSentences(text).find((s) => s.startsWith('The example uses '));
+  assert.ok(sentence, 'the protocolVersion paragraph does not say which revision the example uses');
+  const match = /^The example uses `([^`]+)`/.exec(sentence);
+  assert.ok(match, `"${sentence}" does not name the revision in code quotes`);
+  return match[1];
+}
+
 test('the audit target names its MCP revision as protocolVersion', () => {
   const { target } = config.audit;
   assert.equal(
@@ -172,6 +182,21 @@ test('the README limits the initialize handshake to the revisions that have one'
 
 test('the README protocolVersion paragraph says how each revision carries its version, and nothing more', () => {
   assert.deepEqual(protocolVersionSentences(auditSection()), PROTOCOL_VERSION_SENTENCES);
+});
+
+test('the README names the revision that mcp-audit.json sets in target.protocolVersion', () => {
+  const version = config.audit.target.protocolVersion;
+  const named = exampleRevision(auditSection());
+  assert.equal(
+    named,
+    version,
+    `README.md says the example uses ${named}, but mcp-audit.json sets target.protocolVersion to ${version}`,
+  );
+});
+
+test('the example revision check reads the revision from the README sentence, not from mcp-audit.json', () => {
+  const paragraph = 'In it, `target.protocolVersion` names the MCP revision under audit. The example uses\n`2025-11-25`, an earlier revision.';
+  assert.equal(exampleRevision(paragraph), '2025-11-25');
 });
 
 // Adds a handshake sentence that uses none of the three word stems to the protocolVersion
