@@ -182,7 +182,9 @@ leaves out most of their settings:
       "credentials": { "enabled": true, "scanConfigForSecrets": true },
       "promptInjection": { "enabled": true, "scanToolDescriptions": true },
       "logging": { "enabled": true, "checkAuditLogging": true },
-      "network": { "enabled": true, "checkRateLimiting": true }
+      "network": { "enabled": true, "checkRateLimiting": true },
+      "supplyChain": { "enabled": true, "checkPinnedDependencies": true },
+      "incidentResponse": { "enabled": true, "checkToolKillSwitch": true }
     },
     "reporting": {
       "format": "sarif",
