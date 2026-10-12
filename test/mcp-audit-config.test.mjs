@@ -31,13 +31,20 @@ function auditSection() {
   return readme.slice(start, next === -1 ? undefined : next);
 }
 
-// Returns the sentences that mention initialization without naming the last revision
-// that has the handshake, so that they read as true of every revision.
+// A sentence about the handshake, whichever word it uses for it.
+const HANDSHAKE = /initiali[sz]|handshake|negotiat/i;
+// The scope such a sentence has to carry: the last revision that has the handshake,
+// with or without code quotes, "and earlier".
+const HANDSHAKE_SCOPE = new RegExp(`\`?${LAST_HANDSHAKE_REVISION}\`? and earlier`);
+
+// Returns the sentences about the handshake that do not limit it to the last revision
+// that has one and the revisions before it, so that they read as true of every revision
+// or of the wrong ones.
 function unscopedHandshakeSentences(text) {
   return text
     .replace(/\s+/g, ' ')
     .split(/(?<=\.) /)
-    .filter((sentence) => /initiali[sz]/i.test(sentence) && !sentence.includes(LAST_HANDSHAKE_REVISION));
+    .filter((sentence) => HANDSHAKE.test(sentence) && !HANDSHAKE_SCOPE.test(sentence));
 }
 
 test('the audit target names its MCP revision as protocolVersion', () => {
@@ -85,4 +92,18 @@ test('the handshake check flags a sentence that gives every revision an initiali
   const every = 'Each revision is a date, and a client and server negotiate it during initialization.';
   const earlier = 'In revisions `2025-11-25` and earlier, a client and server agree on it in the\n`initialize` handshake.';
   assert.deepEqual(unscopedHandshakeSentences(`${every}\n${earlier}`), [every]);
+});
+
+test('the handshake check flags a sentence that does not use the word initialization', () => {
+  const handshake = 'A client and server negotiate it in the handshake.';
+  const negotiation = 'The two sides settle the revision by negotiation.';
+  const unrelated = 'Every request declares that date in its `_meta` field.';
+  assert.deepEqual(unscopedHandshakeSentences(`${handshake}\n${negotiation}\n${unrelated}`), [handshake, negotiation]);
+});
+
+test('the handshake check flags a sentence that names the last revision but not the earlier ones', () => {
+  const since = 'Since `2025-11-25`, a client and server agree on it in the `initialize` handshake.';
+  const only = 'Revision 2025-11-25 has an initialize handshake.';
+  const earlier = 'In revisions 2025-11-25 and\nearlier, a client and server agree on it in the handshake.';
+  assert.deepEqual(unscopedHandshakeSentences(`${since}\n${only}\n${earlier}`), [since, only]);
 });
