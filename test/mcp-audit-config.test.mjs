@@ -31,20 +31,43 @@ function auditSection() {
   return readme.slice(start, next === -1 ? undefined : next);
 }
 
-// A sentence about the handshake, whichever word it uses for it.
+// A sentence that names the handshake with one of three word stems: "initiali[sz]"
+// (initialize, initialization), "handshake" or "negotiat" (negotiate, negotiation).
+// A sentence that says the same in other words, such as "they agree on it when they
+// connect", does not match; the protocolVersion paragraph check below catches one there.
 const HANDSHAKE = /initiali[sz]|handshake|negotiat/i;
 // The scope such a sentence has to carry: the last revision that has the handshake,
 // with or without code quotes, "and earlier".
 const HANDSHAKE_SCOPE = new RegExp(`\`?${LAST_HANDSHAKE_REVISION}\`? and earlier`);
 
+// The README paragraph that explains target.protocolVersion, sentence by sentence. It is
+// compared whole because the handshake filter above misses a sentence that uses none of
+// its three word stems.
+const PROTOCOL_VERSION_SENTENCES = [
+  'See [mcp-audit.json](./mcp-audit.json) for the complete configuration.',
+  'In it, `target.protocolVersion` names the MCP revision under audit.',
+  'MCP identifies each revision by its date (`YYYY-MM-DD`).',
+  'From `2026-07-28` on, every request declares that date in its `_meta` field, and over HTTP also in the `MCP-Protocol-Version` header.',
+  'In revisions `2025-11-25` and earlier, a client and server agree on it in the `initialize` handshake.',
+  'The example uses `2026-07-28`, the current revision; set it to the revision your server implements, as listed in the [MCP versioning page](https://modelcontextprotocol.io/specification/versioning).',
+];
+
+function sentences(text) {
+  return text.replace(/\s+/g, ' ').trim().split(/(?<=\.) /);
+}
+
 // Returns the sentences about the handshake that do not limit it to the last revision
 // that has one and the revisions before it, so that they read as true of every revision
 // or of the wrong ones.
 function unscopedHandshakeSentences(text) {
-  return text
-    .replace(/\s+/g, ' ')
-    .split(/(?<=\.) /)
-    .filter((sentence) => HANDSHAKE.test(sentence) && !HANDSHAKE_SCOPE.test(sentence));
+  return sentences(text).filter((sentence) => HANDSHAKE.test(sentence) && !HANDSHAKE_SCOPE.test(sentence));
+}
+
+// Returns the sentences of the paragraph that names `target.protocolVersion`.
+function protocolVersionSentences(text) {
+  const paragraph = text.split(/\n\s*\n/).find((block) => block.includes('`target.protocolVersion`'));
+  assert.ok(paragraph, 'the section has no paragraph that names `target.protocolVersion`');
+  return sentences(paragraph);
 }
 
 test('the audit target names its MCP revision as protocolVersion', () => {
@@ -86,6 +109,24 @@ test('the README limits the initialize handshake to the revisions that have one'
     [],
     `only revisions ${LAST_HANDSHAKE_REVISION} and earlier have an initialize handshake: ${unscoped.join(' ')}`,
   );
+});
+
+test('the README protocolVersion paragraph says how each revision carries its version, and nothing more', () => {
+  assert.deepEqual(protocolVersionSentences(auditSection()), PROTOCOL_VERSION_SENTENCES);
+});
+
+test('the paragraph check flags a handshake sentence that uses none of the three word stems', () => {
+  const section = auditSection();
+  const connect = 'A client and server agree on it when they connect.';
+  const added = section.replace('`initialize` handshake.', `\`initialize\` handshake. ${connect}`);
+  assert.notEqual(added, section, 'the section has no "`initialize` handshake." to add a sentence after');
+  assert.deepEqual(
+    unscopedHandshakeSentences(added),
+    [],
+    'the handshake filter now matches a sentence without its three word stems; update the HANDSHAKE comment',
+  );
+  assert.ok(protocolVersionSentences(added).includes(connect));
+  assert.notDeepEqual(protocolVersionSentences(added), PROTOCOL_VERSION_SENTENCES);
 });
 
 test('the handshake check flags a sentence that gives every revision an initialize handshake', () => {
