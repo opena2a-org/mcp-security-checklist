@@ -115,18 +115,32 @@ test('the README protocolVersion paragraph says how each revision carries its ve
   assert.deepEqual(protocolVersionSentences(auditSection()), PROTOCOL_VERSION_SENTENCES);
 });
 
-test('the paragraph check flags a handshake sentence that uses none of the three word stems', () => {
-  const section = auditSection();
+// Adds a handshake sentence that uses none of the three word stems to the protocolVersion
+// paragraph of the section, and checks that the paragraph check flags it and the handshake
+// filter does not. The filter is tested on the added sentence alone, so that an unscoped
+// handshake sentence elsewhere in the section is left to the handshake check to report.
+function checkStemlessHandshakeSentence(section) {
   const connect = 'A client and server agree on it when they connect.';
   const added = section.replace('`initialize` handshake.', `\`initialize\` handshake. ${connect}`);
   assert.notEqual(added, section, 'the section has no "`initialize` handshake." to add a sentence after');
-  assert.deepEqual(
-    unscopedHandshakeSentences(added),
-    [],
+  assert.equal(
+    HANDSHAKE.test(connect),
+    false,
     'the handshake filter now matches a sentence without its three word stems; update the HANDSHAKE comment',
   );
   assert.ok(protocolVersionSentences(added).includes(connect));
   assert.notDeepEqual(protocolVersionSentences(added), PROTOCOL_VERSION_SENTENCES);
+}
+
+test('the paragraph check flags a handshake sentence that uses none of the three word stems', () => {
+  checkStemlessHandshakeSentence(auditSection());
+});
+
+test('the stem-less sentence check leaves an unscoped handshake sentence elsewhere in the section to the handshake check', () => {
+  const unscoped = 'A client and server negotiate the revision during initialization.';
+  const section = `${auditSection()}\n\n${unscoped}\n`;
+  assert.ok(unscopedHandshakeSentences(section).includes(unscoped));
+  assert.doesNotThrow(() => checkStemlessHandshakeSentence(section));
 });
 
 test('the handshake check flags a sentence that gives every revision an initialize handshake', () => {
