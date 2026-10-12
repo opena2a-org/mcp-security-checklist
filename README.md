@@ -206,12 +206,19 @@ credentials stored in MCP configuration files". They match:
   starts with `${` refers to an environment variable and does not match.
 - keys that start with `sk-` (including `sk-proj-` and `sk-ant-`), GitHub
   tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) and AWS access
-  key IDs (`AKIA`, `ASIA`).
+  key IDs (`AKIA`, `ASIA`). The prefix has to start a word: a key that directly
+  follows a letter, a digit or an underscore does not match. This keeps a word
+  that only ends in a prefix, such as `task-` or `disk-`, from being read as
+  the start of an `sk-` key.
 
 A credential with no known prefix that sits under another name, or in `args`,
-is not matched; extend the list for the names your servers use. The patterns
-carry no inline flags, lookarounds or backreferences, so JavaScript and Python
-compile them as written. Match them case-sensitively.
+is not matched; extend the list for the names your servers use. A key is also
+missed when an escape or an encoded character puts a letter or a digit right
+before it: in the file text `"line1\nsk-..."` the key follows the `n` of `\n`,
+and in `?q=key%3Dsk-...` it follows the `D` of `%3D`. To find such a key, run
+the patterns on the decoded text: the parsed JSON string or the decoded URL.
+The patterns carry no inline flags, lookarounds or backreferences, so
+JavaScript and Python compile them as written. Match them case-sensitively.
 `test/secret-patterns.test.mjs` runs each pattern against fake credentials
 (`node --test`).
 

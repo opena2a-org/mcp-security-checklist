@@ -1,4 +1,5 @@
-// Checks the secretPatterns in mcp-audit.json against fake credentials.
+// Checks the secretPatterns in mcp-audit.json against fake credentials, and what
+// README.md says about where a key has to start.
 // Run from the repository root: node --test
 
 import { test } from 'node:test';
@@ -10,6 +11,16 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const { secretPatterns } = JSON.parse(read('../mcp-audit.json')).audit.checks.credentials;
 // An MCP client configuration: two servers store a credential, one refers to a variable.
 const sample = read('./fixtures/sample.mcp.json');
+const readme = read('../README.md');
+
+// The "Reference Audit Configuration" section of the README, up to the next "## "
+// heading, with each run of whitespace as one space.
+function auditSection() {
+  const start = readme.indexOf('## Reference Audit Configuration\n');
+  assert.notEqual(start, -1, 'README has no "## Reference Audit Configuration" section');
+  const next = readme.indexOf('\n## ', start + 1);
+  return readme.slice(start, next === -1 ? undefined : next).replace(/\s+/g, ' ');
+}
 
 // Each pattern is compiled as written, with no flags, so matching is case-sensitive.
 function found(text) {
@@ -132,4 +143,44 @@ test('a word that only contains a key prefix is not read as a key', () => {
     `sk-${fake(19)}`,
   ];
   assert.deepEqual(words.filter((word) => found(envBlock(word))), [], 'words flagged as keys');
+});
+
+test('a key prefix glued to a letter, a digit or an underscore is not read as a key', () => {
+  // Every key pattern opens with a word boundary, so a prefix has to start a word.
+  const flagged = [];
+  for (const [prefix, key] of Object.entries(KEYS)) {
+    for (const before of ['x', 'Z', '7', '_']) {
+      if (found(envBlock(`${before}${key}`))) flagged.push({ prefix, before });
+    }
+  }
+  assert.deepEqual(flagged, [], 'glued prefixes read as keys');
+});
+
+test('a key behind an escape or an encoded character is found in the decoded text only', () => {
+  const flagged = [];
+  const missed = [];
+  for (const [prefix, key] of Object.entries(KEYS)) {
+    // As a JSON file writes it, the key follows the "n" of the escape "\n".
+    const json = JSON.stringify({ script: `line1\n${key}` });
+    // In a URL, it follows the "D" of "%3D", an encoded "=".
+    const url = `https://example.com/search?q=${encodeURIComponent(`key=${key}`)}`;
+    if (found(json)) flagged.push({ prefix, where: 'after an escape in JSON text' });
+    if (found(url)) flagged.push({ prefix, where: 'after an encoded character in a URL' });
+    if (!found(JSON.parse(json).script)) missed.push({ prefix, where: 'in the parsed JSON string' });
+    if (!found(decodeURIComponent(url))) missed.push({ prefix, where: 'in the decoded URL' });
+  }
+  assert.deepEqual(flagged, [], 'keys the README says the patterns miss');
+  assert.deepEqual(missed, [], 'keys that no pattern finds in the decoded text');
+});
+
+test('the README says where a key has to start and how to find one that does not', () => {
+  const text = auditSection();
+  assert.match(
+    text,
+    /directly follows a letter, a digit or an underscore does not match/,
+    'the section does not say that a key glued to a word character is not matched',
+  );
+  assert.match(text, /`"line1\\nsk-\.\.\."`/, 'the section gives no example of a key after an escape');
+  assert.match(text, /`\?q=key%3Dsk-\.\.\.`/, 'the section gives no example of a key after an encoded character');
+  assert.match(text, /on the decoded text/, 'the section does not say to run the patterns on the decoded text');
 });
