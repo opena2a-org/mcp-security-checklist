@@ -18,6 +18,22 @@ const GUIDES_LINK = '](https://agentpwn.com/tools)';
 const TESTING = /\btest(?:ing|s)?\b/i;
 const LIST_ITEM = /^\s*(?:[-*+]|\d+\.) /;
 const HEADING = /^ {0,3}#{1,6}(?:\s|$)/;
+// The blocks that the text of a list item cannot run into: a thematic break, a code
+// fence, a block quote and an HTML block. An HTML block opens with a comment, a
+// declaration or one of the block-level tags, not with an inline tag or an autolink.
+const THEMATIC_BREAK = /^ {0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/;
+const FENCE = /^ {0,3}(`{3,}(?!.*`)|~{3,})/;
+const BLOCK_QUOTE = /^ {0,3}>/;
+const HTML_TAGS =
+  'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|' +
+  'fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|' +
+  'menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|' +
+  'track|ul';
+const HTML_BLOCK = new RegExp(
+  '^ {0,3}<(?:!--|\\?|![a-z]|!\\[CDATA\\[|(?:pre|script|style|textarea)(?:[ \\t>]|$)|' +
+    `/?(?:${HTML_TAGS})(?:[ \\t>]|/>|$))`,
+  'i',
+);
 
 // Each list item in the text with its lead-in: the last sentence of the nearest
 // paragraph or heading above the list.
@@ -26,17 +42,33 @@ function listItems(text) {
   let paragraph = [];
   let leadIn = '';
   let current = null;
+  let column = 0;
+  let fence = null;
   for (const line of text.split('\n')) {
-    const item = LIST_ITEM.test(line);
+    // The lines of a fenced code block are code, up to the fence that closes it.
+    if (fence) {
+      if (fence.test(line)) fence = null;
+      continue;
+    }
+    // A thematic break written with spaces (- - -) is not a list item.
+    const rule = THEMATIC_BREAK.test(line);
+    const item = !rule && LIST_ITEM.test(line);
     const blank = line.trim() === '';
+    const opener = FENCE.exec(line);
+    // A line left of the item's text that opens one of those blocks ends the item;
+    // the same line indented to the item's text is inside the item.
+    const block = rule || opener || BLOCK_QUOTE.test(line) || HTML_BLOCK.test(line);
+    const outside = block && line.search(/\S/) < column;
     // A non-blank line right after a list item continues that item, unless it is
-    // an item or a heading itself.
-    if (current && !item && !blank && !HEADING.test(line)) {
+    // an item or a heading itself, or it opens a block outside the item.
+    if (current && !item && !blank && !HEADING.test(line) && !outside) {
       current.item += ` ${line.trim()}`;
       continue;
     }
     current = null;
-    if (!item && !blank) {
+    if (opener) fence = new RegExp(`^ {0,3}${opener[1][0]}{${opener[1].length},}[ \\t]*$`);
+    // A thematic break and a code fence end a paragraph and are not part of one.
+    if (!item && !blank && !rule && !opener) {
       paragraph.push(line.trim());
       continue;
     }
@@ -44,6 +76,9 @@ function listItems(text) {
     paragraph = [];
     if (item) {
       current = { item: line.trim(), leadIn };
+      // The text of an item starts after its marker and one to four spaces.
+      const [, marker, gap] = /^(\s*(?:[-*+]|\d+\.))( {1,4}(?=\S))?/.exec(line);
+      column = marker.length + (gap ? gap.length : 1);
       items.push(current);
     }
   }
@@ -102,6 +137,23 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n## Security Testing\n${guides}\n`), [
     `## Security Testing ${guides}`,
   ]);
+  // A thematic break, code fence, block quote or HTML block right after a list item ends
+  // the list, so the sentence written after it introduces the next list.
+  const environments = 'For safe, controlled testing environments:';
+  for (const block of ['---', '* * *', '```sh\nnpm run audit\n```']) {
+    const text = `${reading}\n\n${honeypot}\n${block}\n${environments}\n${guides}\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [`${environments} ${guides}`], `the list runs past ${block}`);
+  }
+  assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n> ${environments}\n${guides}\n`), [
+    `> ${environments} ${guides}`,
+  ]);
+  assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n<p>${environments}</p>\n\n${guides}\n`), [
+    `<p>${environments}</p> ${guides}`,
+  ]);
+  // The lines of a code fence are code, not a lead-in.
+  assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n\`\`\`sh\nnpm test\n\`\`\`\n${guides}\n`), []);
+  // A block indented to the text of a list item is inside that item.
+  assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n  > used for testing\n${guides}\n`), []);
 });
 
 test('mcp-audit.json does not name agentpwn.com/tools as a testing resource', () => {
