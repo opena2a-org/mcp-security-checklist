@@ -1,11 +1,14 @@
-// Checks the "Testing Your Defenses" table and the links in README.md.
+// Checks the "Testing Your Defenses" table and the links in README.md, and that the
+// configuration excerpt under "Reference Audit Configuration" matches mcp-audit.json.
 // Run from the repository root: node --test
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 
 const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+const auditConfig = JSON.parse(readFileSync(new URL('../mcp-audit.json', import.meta.url), 'utf8'));
 
 const NO_TEST = 'No dedicated test';
 // An inline link or image: [label](destination) or [label](<destination>), with
@@ -467,6 +470,47 @@ test('the Learning Resources entry for the agentpwn learn page describes a guide
   assert.doesNotMatch(entry, COURSE_CLAIM, `entry describes the page as a course: ${entry}`);
   assert.match(entry, /\bguide\b/i, `entry does not name the page as a guide: ${entry}`);
   assert.match(entry, /\bMCP exploitation\b/i, `entry does not say where the MCP material is: ${entry}`);
+});
+
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// Returns the path of every key in the excerpt that is missing from the full
+// configuration at the same path, or holds a different value there. An object in the
+// excerpt may leave keys out; any other value, an array included, must be equal.
+function excerptMismatches(excerpt, full, path = '') {
+  if (!isPlainObject(excerpt)) return isDeepStrictEqual(excerpt, full) ? [] : [path];
+  if (!isPlainObject(full)) return [path];
+  return Object.keys(excerpt).flatMap((key) => {
+    const keyPath = path ? `${path}.${key}` : key;
+    return Object.hasOwn(full, key) ? excerptMismatches(excerpt[key], full[key], keyPath) : [keyPath];
+  });
+}
+
+test('the configuration excerpt in the README is a shortened copy of mcp-audit.json', () => {
+  const blocks = [...section('Reference Audit Configuration').matchAll(/^```json\n([\s\S]*?)^```$/gm)];
+  assert.equal(blocks.length, 1, 'expected one JSON block under "Reference Audit Configuration"');
+  const excerpt = JSON.parse(blocks[0][1]);
+  assert.deepEqual(excerptMismatches(excerpt, auditConfig), [], 'excerpt keys that are missing from mcp-audit.json or differ from it');
+  // The README says the excerpt keeps every check group.
+  assert.deepEqual(Object.keys(excerpt.audit?.checks ?? {}), Object.keys(auditConfig.audit.checks), 'check groups in the excerpt');
+});
+
+test('the excerpt check flags keys that are missing, renamed, moved or changed', () => {
+  const full = { audit: { target: { url: 'https://a.example' }, checks: { inputValidation: { enabled: true, list: ['a', 'b'] } } } };
+  const cases = [
+    // The flat form the README once showed, with a string target and an array of checks.
+    [{ target: 'https://a.example', checks: ['input-validation'], reportFormat: 'sarif' }, ['target', 'checks', 'reportFormat']],
+    [{ audit: { target: 'https://a.example' } }, ['audit.target']],
+    [{ audit: { target: { url: 'https://b.example' } } }, ['audit.target.url']],
+    [{ audit: { checks: { 'input-validation': { enabled: true } } } }, ['audit.checks.input-validation']],
+    [{ audit: { checks: { inputValidation: { enabled: false } } } }, ['audit.checks.inputValidation.enabled']],
+    [{ audit: { checks: { inputValidation: { list: ['a'] } } } }, ['audit.checks.inputValidation.list']],
+    [{ audit: { checks: { inputValidation: { enabled: { on: true } } } } }, ['audit.checks.inputValidation.enabled']],
+  ];
+  for (const [excerpt, expected] of cases) {
+    assert.deepEqual(excerptMismatches(excerpt, full), expected, JSON.stringify(excerpt));
+  }
+  assert.deepEqual(excerptMismatches({ audit: { checks: { inputValidation: { enabled: true } } } }, full), []);
 });
 
 test('in-page links resolve to a README heading', () => {
