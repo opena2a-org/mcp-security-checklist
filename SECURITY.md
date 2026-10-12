@@ -39,8 +39,9 @@ We encourage security testing of MCP deployments. For safe, controlled testing e
 | Version | Supported |
 |---|---|
 | main branch | Yes |
-| Tagged releases | Yes |
 | Forks | No |
+
+This repository has no tagged releases yet, so `main` is the only supported version. Security fixes land on `main`.
 
 ## Acknowledgments
 
