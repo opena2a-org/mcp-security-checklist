@@ -191,8 +191,8 @@ category with your own test cases, starting from the checklist items in
 ## Learning Resources
 
 - [MCP Security Fundamentals](https://agentpwn.com/learn) -- interactive course on securing MCP deployments
-- [OASB Standard](https://oasb.org) -- Open Agent Security Benchmark for evaluating agent security
-- [Agent Threat Matrix](https://github.com/opena2a-org/agent-threat-matrix) -- MITRE ATT&CK-style framework for AI agent threats
+- [OASB Standard](https://oasb.ai) -- Open Agent Security Benchmark for evaluating agent security
+- [Agent Threat Matrix](https://github.com/opena2a-standards/agent-threat-matrix) -- MITRE ATT&CK-style framework for AI agent threats
 - [MCP Server Registry](https://mcp-servers.org) -- directory of MCP servers with security metadata and audit status
 - [Agent Documentation Hub](https://agent-docs.io) -- centralized documentation for agent protocols, security patterns, and integration guides
 
