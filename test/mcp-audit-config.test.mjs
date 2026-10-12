@@ -69,11 +69,12 @@ function sentences(text) {
   return text.replace(/\s+/g, ' ').trim().split(/(?<=\.) /);
 }
 
-// The paragraphs and list items of the section, each on one line, without its heading
-// and its code blocks.
+// The paragraphs and list items of the section, each on one line, without its code blocks
+// and without its "## " heading when the text starts with one. A first line that is not a
+// heading is kept, so that text without a heading loses none of its sentences.
 function paragraphs(text) {
   return text
-    .slice(text.indexOf('\n') + 1)
+    .replace(/^## .*\n?/, '')
     .replace(/^```[\s\S]*?^```$/gm, '')
     .split(/\n\s*\n|\n(?=- )/)
     .map((block) => block.replace(/\s+/g, ' ').trim())
@@ -173,6 +174,12 @@ test('the stem-less sentence check leaves an unscoped handshake sentence elsewhe
   const section = `${auditSection()}\n\n${unscoped}\n`;
   assert.ok(unscopedHandshakeSentences(section).includes(unscoped));
   assert.doesNotThrow(() => checkStemlessHandshakeSentence(section));
+});
+
+test('the paragraph split drops a first line only when it is the section heading', () => {
+  const sentence = 'In it, `target.protocolVersion` names the MCP revision under audit.';
+  assert.deepEqual(protocolVersionSentences(`${sentence}\nMore.`), [sentence, 'More.']);
+  assert.deepEqual(paragraphs(`## Reference Audit Configuration\n${sentence}`), [sentence]);
 });
 
 test('the README section has only the paragraphs and list items it is known to have', () => {
