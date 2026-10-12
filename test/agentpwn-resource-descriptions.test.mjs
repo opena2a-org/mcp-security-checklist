@@ -46,16 +46,33 @@ const HTML_BLOCKS = [
 // The last sentence of a paragraph or heading.
 const lastSentence = (text) => text.split(/(?<=[.:!?]) /).at(-1);
 
+// Whether an HTML block shows any text on the page. Its tags, comments, processing
+// instructions, declarations and CDATA sections show none.
+const showsText = (html) =>
+  /\S/.test(html.replace(/<!--.*?-->|<\?.*?\?>|<!\[CDATA\[.*?\]\]>|<![a-z][^>]*>|<\/?[a-z][^>]*>/gi, ''));
+
 // Each list item in the text with its lead-in: the last sentence of the nearest
-// paragraph or heading above the list.
+// paragraph, heading or HTML block that shows text above the list.
 function listItems(text) {
   const items = [];
   let paragraph = [];
   let leadIn = '';
   let current = null;
   let column = 0;
+  let afterBlank = false;
   let fence = null;
   let html = null;
+  let raw = [];
+  const endParagraph = () => {
+    if (paragraph.length > 0) leadIn = lastSentence(paragraph.join(' '));
+    paragraph = [];
+  };
+  // An HTML block that shows no text, such as a comment or a lone <div>, leaves the
+  // lead-in above it to the list below it.
+  const endHtml = () => {
+    if (showsText(raw.join(' '))) leadIn = lastSentence(raw.join(' '));
+    raw = [];
+  };
   for (const line of text.split('\n')) {
     // The lines of a fenced code block are code, up to the fence that closes it.
     if (fence) {
@@ -64,17 +81,15 @@ function listItems(text) {
     }
     const blank = line.trim() === '';
     // The lines of an HTML block are raw HTML, not list items or headings, up to the
-    // line the block ends on. They read as a paragraph above the next list.
+    // line the block ends on. A blank line inside a raw text block or a comment is part
+    // of it.
     if (html) {
-      const end = html.test(line);
-      if (end) html = null;
-      if (!blank) {
-        paragraph.push(line.trim());
-        continue;
+      if (!blank) raw.push(line.trim());
+      if (html.test(line)) {
+        html = null;
+        endHtml();
       }
-      // A blank line inside a raw text block or a comment is part of it; the blank line
-      // that ends the block of a block-level tag ends the paragraph as well.
-      if (!end) continue;
+      continue;
     }
     // A thematic break written with spaces (- - -) is not a list item.
     const rule = THEMATIC_BREAK.test(line);
@@ -85,16 +100,31 @@ function listItems(text) {
     // A line left of the item's text that opens one of those blocks ends the item;
     // the same line indented to the item's text is inside the item.
     const block = heading || rule || opener || BLOCK_QUOTE.test(line) || htmlBlock;
-    const outside = block && line.search(/\S/) < column;
+    const indent = line.search(/\S/);
+    // A blank line does not end a list item: the item goes on at the next line that is
+    // indented to its text.
+    if (current && blank) {
+      afterBlank = true;
+      continue;
+    }
     // A non-blank line right after a list item continues that item, unless it is
-    // an item itself, or it opens a block outside the item.
-    if (current && !item && !blank && !outside) {
+    // an item itself, or it opens a block outside the item. After a blank line, only a
+    // line indented to the item's text is inside the item.
+    if (current && !item && (afterBlank ? indent >= column : !(block && indent < column))) {
       current.item += ` ${line.trim()}`;
+      afterBlank = false;
       continue;
     }
     current = null;
     if (opener) fence = new RegExp(`^ {0,3}${opener[1][0]}{${opener[1].length},}[ \\t]*$`);
-    if (htmlBlock && !htmlBlock[1].test(line)) html = htmlBlock[1];
+    // An HTML block ends the paragraph above it, and runs to the line its end marker is on.
+    if (htmlBlock) {
+      endParagraph();
+      raw = [line.trim()];
+      if (htmlBlock[1].test(line)) endHtml();
+      else html = htmlBlock[1];
+      continue;
+    }
     // A heading is a block of its own: it ends the paragraph above it, and the line
     // below it starts a new one.
     if (heading) {
@@ -107,10 +137,10 @@ function listItems(text) {
       paragraph.push(line.trim());
       continue;
     }
-    if (paragraph.length > 0) leadIn = lastSentence(paragraph.join(' '));
-    paragraph = [];
+    endParagraph();
     if (item) {
       current = { item: line.trim(), leadIn };
+      afterBlank = false;
       // The text of an item starts after its marker and one to four spaces.
       const [, marker, gap] = /^(\s*(?:[-*+]|\d+\.))( {1,4}(?=\S))?/.exec(line);
       column = marker.length + (gap ? gap.length : 1);
@@ -175,6 +205,7 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   ]);
   // A heading ends the paragraph above it, and the line below it starts a new one.
   assert.deepEqual(guidesListedAsTesting(`## Security Testing\nFor written guidance:\n${guides}\n`), []);
+  assert.deepEqual(guidesListedAsTesting(`Intro on testing\n## Further Reading\n${guides}\n`), []);
   // A heading right after a list item and left of the item's text is not part of that item.
   assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n## Security Testing\n${guides}\n`), [
     `## Security Testing ${guides}`,
@@ -205,11 +236,37 @@ test('the lead-in check flags a guides entry in a list of testing environments',
     `<p>${environments}</p> ${guides}`,
   ]);
   // A raw text tag, a comment, a processing instruction, a declaration and a CDATA section
-  // open an HTML block as well, so each one ends the list when it is left of the item's text.
-  for (const html of ['<pre>x</pre>', '<!-- note -->', '<?x ?>', '<!DOCTYPE html>', '<![CDATA[x]]>']) {
-    const text = `${environments}\n\n${honeypot}\n${html}\n${guides}\n`;
-    assert.deepEqual(guidesListedAsTesting(text), [], `the list runs past ${html}`);
+  // open an HTML block as well, so each one ends the list when it is left of the item's
+  // text. Each ends on its first line, and the line below it starts a new paragraph.
+  const shown = '<pre>x</pre>';
+  const hidden = ['<!-- note -->', '<?x ?>', '<!DOCTYPE html>', '<![CDATA[x]]>'];
+  for (const html of [shown, ...hidden]) {
+    const text = `${reading}\n\n${honeypot}\n${html}\n${environments}\n${guides}\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [`${environments} ${guides}`], `the list runs past ${html}`);
   }
+  // An HTML block that shows text introduces the list below it.
+  assert.deepEqual(guidesListedAsTesting(`${environments}\n\n${honeypot}\n${shown}\n${guides}\n`), []);
+  // One that shows no text leaves the lead-in above it to the list below it, as the page
+  // shows that list under the same lead-in.
+  for (const html of hidden) {
+    const text = `${environments}\n\n${honeypot}\n${html}\n${guides}\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [`${environments} ${guides}`], `${html} hides the lead-in`);
+  }
+  for (const html of ['<div>', '<div>\n<!-- note -->\n</div>']) {
+    const text = `${environments}\n\n${html}\n\n${guides}\n\n</div>\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [`${environments} ${guides}`], `${html} hides the lead-in`);
+  }
+  // An HTML block ends the paragraph above it, so the lead-in is the block when it shows
+  // text, and the paragraph when it shows none.
+  assert.deepEqual(guidesListedAsTesting(`Notes on testing\n${shown}\n${guides}\n`), []);
+  assert.deepEqual(guidesListedAsTesting(`${environments}\n<!-- note -->\n\n${guides}\n`), [`${environments} ${guides}`]);
+  // The lines of an HTML block that runs to a blank line are part of it, and the text they
+  // show introduces the list below it.
+  assert.deepEqual(guidesListedAsTesting(`<div>\n${environments}\n\n${guides}\n`), [`<div> ${environments} ${guides}`]);
+  // A one-line comment ends on its line, so the paragraph after it introduces the list.
+  assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n<!-- note -->\n\n${environments}\n${guides}\n`), [
+    `${environments} ${guides}`,
+  ]);
   // A block left of the item's text ends the item, which is at column 4 after a marker
   // and three spaces.
   assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypotAt4}\n  > ${environments}\n${guides}\n`), [
@@ -230,6 +287,12 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   // A <pre> block and a comment run to their end, past a blank line.
   for (const [open, close] of [['<pre>', '</pre>'], ['<!--', '-->']]) {
     const text = `${reading}\n\n${honeypot}\n${open}\n${environments}\n\n${guides}\n${close}\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [], `the block ends before ${close}`);
+  }
+  // A comment, a processing instruction and a CDATA section end only at their own end
+  // marker, not at the > of a tag, and a raw text block only at its own closing tag.
+  for (const [open, close] of [['<!--', '-->'], ['<?x', '?>'], ['<![CDATA[', ']]>'], ['<pre>', '</pre>']]) {
+    const text = `${environments}\n\n${open}\n<b>testing</b>\n${guides}\n${close}\n`;
     assert.deepEqual(guidesListedAsTesting(text), [], `the block ends before ${close}`);
   }
   // The lines of a code fence are code, not a lead-in.
@@ -254,6 +317,19 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   assert.deepEqual(guidesListedAsTesting(`${environments}\n\n${honeypot}\n  <p>x</p>\n${guides}\n`), [
     `${environments} ${guides}`,
   ]);
+  // A paragraph after a blank line is inside a list item when it is indented to the item's
+  // text, and the entry below it is in the same list. Its lines, and those of a later
+  // entry, go on lazily without that indent.
+  const loose = [
+    `${honeypot}\n\n  More about the honeypot.`,
+    `${honeypot}\n\n  More about\nthe honeypot.`,
+    `${honeypot}\n\n- [agentpwn.com](https://agentpwn.com) -- honeypot environment\nfor agent security tools`,
+  ];
+  for (const list of loose) {
+    assert.deepEqual(guidesListedAsTesting(`${environments}\n\n${list}\n${guides}\n`), [`${environments} ${guides}`], list);
+  }
+  // Left of the item's text, it ends the list and introduces the list below it.
+  assert.deepEqual(guidesListedAsTesting(`${environments}\n\n${honeypot}\n\nMore about the honeypot.\n${guides}\n`), []);
 });
 
 test('the code-fence pattern reads a long run of backticks in linear time', () => {

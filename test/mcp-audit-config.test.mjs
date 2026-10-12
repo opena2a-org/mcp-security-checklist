@@ -248,8 +248,12 @@ test('the stem-less paragraph check leaves an unscoped handshake sentence elsewh
   assert.doesNotThrow(() => checkStemlessHandshakeParagraph(section));
 });
 
-test('the section check flags a handshake sentence without the three word stems added to a paragraph or list item it knows', () => {
-  const section = auditSection();
+// Adds a handshake sentence that uses none of the three word stems to the end of each
+// paragraph and list item the section is known to have, and checks that the section check
+// flags it there. Each ending is matched to the paragraph or list item it ends, not to its
+// place in the list, so that a paragraph inserted elsewhere in the section is left to the
+// section check to report.
+function checkStemlessKnownParagraph(section) {
   const known = sectionSentences(section);
   const connect = 'A client and server agree on it when they connect.';
   assert.equal(
@@ -268,9 +272,11 @@ test('the section check flags a handshake sentence without the three word stems 
     '(`node --test`).',
   ];
   assert.equal(endings.length, SECTION_SENTENCES.length, 'a known paragraph or list item has no ending to add the sentence after');
-  endings.forEach((ending, index) => {
+  for (const ending of endings) {
     const added = section.replace(ending, `${ending}\n${connect}`);
     assert.notEqual(added, section, `the section has no "${ending}" to add a sentence after`);
+    const index = known.findIndex((paragraph) => paragraph.join(' ').endsWith(ending));
+    assert.notEqual(index, -1, `no paragraph or list item of the section ends with "${ending}"`);
     const read = sectionSentences(added);
     assert.equal(read.length, known.length, `"${connect}" after "${ending}" is read as a paragraph of its own`);
     assert.equal(
@@ -279,7 +285,24 @@ test('the section check flags a handshake sentence without the three word stems 
       `"${connect}" after "${ending}" is not read as the end of paragraph or list item ${index + 1}`,
     );
     assert.notDeepEqual(read, SECTION_SENTENCES);
-  });
+  }
+}
+
+test('the section check flags a handshake sentence without the three word stems added to a paragraph or list item it knows', () => {
+  checkStemlessKnownParagraph(auditSection());
+});
+
+test('the known-paragraph stem-less check leaves a paragraph inserted elsewhere in the section to the section check', () => {
+  const link = '[MCP versioning page](https://modelcontextprotocol.io/specification/versioning).';
+  for (const inserted of [
+    'The audit runs each check group in the order listed.',
+    'A client and server negotiate the revision during initialization.',
+  ]) {
+    const section = auditSection().replace(link, `${link}\n\n${inserted}`);
+    assert.ok(paragraphs(section).includes(inserted), `"${inserted}" is not read as a paragraph of its own`);
+    assert.notDeepEqual(sectionSentences(section), SECTION_SENTENCES);
+    assert.doesNotThrow(() => checkStemlessKnownParagraph(section));
+  }
 });
 
 test('the handshake check flags a sentence that gives every revision an initialize handshake', () => {
