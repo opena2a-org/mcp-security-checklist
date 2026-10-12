@@ -124,6 +124,11 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   assert.deepEqual(guidesListedAsTesting(`${testing}\n\n${wrapped}\n${guides}\n`), [
     `For safe, controlled testing environments: ${guides}`,
   ]);
+  // So does every later continuation line when the item wraps over three lines or more.
+  const wrappedThree = '- [agentpwn.com](https://agentpwn.com) -- honeypot environment\n  for testing agent security tools\n  against live attacks';
+  assert.deepEqual(guidesListedAsTesting(`${testing}\n\n${wrappedThree}\n${guides}\n`), [
+    `For safe, controlled testing environments: ${guides}`,
+  ]);
   // The lead-in is the sentence that introduces the list, not the paragraph before it.
   const reading = 'We encourage security testing of MCP deployments. For written guidance:';
   assert.deepEqual(guidesListedAsTesting(`${reading}\n${guides}\n`), []);
@@ -137,6 +142,12 @@ test('the lead-in check flags a guides entry in a list of testing environments',
   assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n## Security Testing\n${guides}\n`), [
     `## Security Testing ${guides}`,
   ]);
+  // The same holds for a heading indented by one to three spaces.
+  for (const indent of [' ', '  ', '   ']) {
+    assert.deepEqual(guidesListedAsTesting(`${reading}\n\n${honeypot}\n${indent}## Security Testing\n${guides}\n`), [
+      `## Security Testing ${guides}`,
+    ]);
+  }
   // A thematic break, code fence, block quote or HTML block right after a list item ends
   // the list, so the sentence written after it introduces the next list.
   const environments = 'For safe, controlled testing environments:';
