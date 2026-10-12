@@ -34,7 +34,8 @@ function auditSection() {
 // A sentence that names the handshake with one of three word stems: "initiali[sz]"
 // (initialize, initialization), "handshake" or "negotiat" (negotiate, negotiation).
 // A sentence that says the same in other words, such as "they agree on it when they
-// connect", does not match; the protocolVersion paragraph check below catches one there.
+// connect", does not match; the checks below catch one in the protocolVersion paragraph
+// or in a paragraph or list item of its own.
 const HANDSHAKE = /initiali[sz]|handshake|negotiat/i;
 // The scope such a sentence has to carry: the last revision that has the handshake,
 // with or without code quotes, "and earlier".
@@ -52,8 +53,39 @@ const PROTOCOL_VERSION_SENTENCES = [
   'The example uses `2026-07-28`, the current revision; set it to the revision your server implements, as listed in the [MCP versioning page](https://modelcontextprotocol.io/specification/versioning).',
 ];
 
+// How each paragraph and list item of the section starts, in order. A paragraph or list
+// item that is not on this list, such as one with a handshake sentence that uses none of
+// the three word stems, fails the section check.
+const SECTION_OPENINGS = [
+  '`mcp-audit.json` is a reference configuration',
+  'See [mcp-audit.json](./mcp-audit.json) for the complete configuration.',
+  'The `secretPatterns` under `checks.credentials`',
+  '- a quoted value stored under a name',
+  '- keys that start with `sk-`',
+  'A credential with no known prefix',
+];
+
 function sentences(text) {
   return text.replace(/\s+/g, ' ').trim().split(/(?<=\.) /);
+}
+
+// The paragraphs and list items of the section, each on one line, without its heading
+// and its code blocks.
+function paragraphs(text) {
+  return text
+    .slice(text.indexOf('\n') + 1)
+    .replace(/^```[\s\S]*?^```$/gm, '')
+    .split(/\n\s*\n|\n(?=- )/)
+    .map((block) => block.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+// Returns the opening of each paragraph and list item that starts with a known one, and
+// any other paragraph or list item whole.
+function paragraphOpenings(text) {
+  return paragraphs(text).map(
+    (paragraph) => SECTION_OPENINGS.find((opening) => paragraph.startsWith(opening)) ?? paragraph,
+  );
 }
 
 // Returns the sentences about the handshake that do not limit it to the last revision
@@ -65,7 +97,7 @@ function unscopedHandshakeSentences(text) {
 
 // Returns the sentences of the paragraph that names `target.protocolVersion`.
 function protocolVersionSentences(text) {
-  const paragraph = text.split(/\n\s*\n/).find((block) => block.includes('`target.protocolVersion`'));
+  const paragraph = paragraphs(text).find((block) => block.includes('`target.protocolVersion`'));
   assert.ok(paragraph, 'the section has no paragraph that names `target.protocolVersion`');
   return sentences(paragraph);
 }
@@ -141,6 +173,35 @@ test('the stem-less sentence check leaves an unscoped handshake sentence elsewhe
   const section = `${auditSection()}\n\n${unscoped}\n`;
   assert.ok(unscopedHandshakeSentences(section).includes(unscoped));
   assert.doesNotThrow(() => checkStemlessHandshakeSentence(section));
+});
+
+test('the README section has only the paragraphs and list items it is known to have', () => {
+  assert.deepEqual(paragraphOpenings(auditSection()), SECTION_OPENINGS);
+});
+
+test('the section check flags a handshake sentence without the three word stems in a paragraph or list item of its own', () => {
+  const section = auditSection();
+  const connect = 'A client and server agree on it when they connect.';
+  const link = '[MCP versioning page](https://modelcontextprotocol.io/specification/versioning).';
+  const credential = '\n\nA credential with no known prefix';
+  const additions = [
+    // A paragraph after the protocolVersion paragraph.
+    { anchor: link, replacement: `${link}\n\n${connect}`, paragraph: connect },
+    // A third item in the list of what the secretPatterns match.
+    { anchor: credential, replacement: `\n- ${connect}${credential}`, paragraph: `- ${connect}` },
+  ];
+  for (const { anchor, replacement, paragraph } of additions) {
+    const added = section.replace(anchor, replacement);
+    assert.notEqual(added, section, `the section has no "${anchor.trim()}" to add a paragraph next to`);
+    assert.deepEqual(
+      unscopedHandshakeSentences(added),
+      [],
+      'the handshake filter now matches a sentence without its three word stems; update the HANDSHAKE comment',
+    );
+    assert.deepEqual(protocolVersionSentences(added), PROTOCOL_VERSION_SENTENCES);
+    assert.ok(paragraphOpenings(added).includes(paragraph), `"${paragraph}" is not read as a paragraph of its own`);
+    assert.notDeepEqual(paragraphOpenings(added), SECTION_OPENINGS);
+  }
 });
 
 test('the handshake check flags a sentence that gives every revision an initialize handshake', () => {
