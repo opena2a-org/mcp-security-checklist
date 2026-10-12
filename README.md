@@ -189,8 +189,10 @@ leaves out most of their settings:
 
 See [mcp-audit.json](./mcp-audit.json) for the complete configuration.
 In it, `target.protocolVersion` names the MCP revision under audit. MCP
-identifies each revision by its date (`YYYY-MM-DD`), and that string is what a
-client and server negotiate during initialization. The example uses
+identifies each revision by its date (`YYYY-MM-DD`). From `2026-07-28` on,
+every request declares that date in its `_meta` field, and over HTTP also in
+the `MCP-Protocol-Version` header. In revisions `2025-11-25` and earlier, a
+client and server agree on it in the `initialize` handshake. The example uses
 `2026-07-28`, the current revision; set it to the revision your server
 implements, as listed in the
 [MCP versioning page](https://modelcontextprotocol.io/specification/versioning).
