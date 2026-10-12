@@ -5,6 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -145,7 +146,7 @@ test('a word that only contains a key prefix is not read as a key', () => {
   assert.deepEqual(words.filter((word) => found(envBlock(word))), [], 'words flagged as keys');
 });
 
-test('a key prefix glued to a letter, a digit or an underscore is not read as a key', () => {
+test('a key prefix glued to an ASCII letter, digit or underscore is not read as a key', () => {
   // Every key pattern opens with a word boundary, so a prefix has to start a word.
   const flagged = [];
   for (const [prefix, key] of Object.entries(KEYS)) {
@@ -155,6 +156,49 @@ test('a key prefix glued to a letter, a digit or an underscore is not read as a 
   }
   assert.deepEqual(flagged, [], 'glued prefixes read as keys');
 });
+
+// A Latin letter with an accent, a Cyrillic letter and an Arabic-Indic digit.
+const NON_ASCII = ['é', 'д', '٣'];
+
+test('in JavaScript a key glued to a non-ASCII letter or digit is still found', () => {
+  // A JavaScript word boundary counts only A-Z, a-z, 0-9 and _ as word characters.
+  const missed = [];
+  for (const [prefix, key] of Object.entries(KEYS)) {
+    for (const before of NON_ASCII) {
+      if (!found(envBlock(`${before}${key}`))) missed.push({ prefix, before });
+    }
+  }
+  assert.deepEqual(missed, [], 'keys after a non-ASCII character that no pattern finds');
+});
+
+const python = spawnSync('python3', ['-I', '-c', 'pass']);
+
+test(
+  'in Python a key glued to a non-ASCII letter or digit is found only with re.ASCII',
+  { skip: python.status === 0 ? false : 'python3 is not installed' },
+  () => {
+    const keyPatterns = secretPatterns.filter((pattern) => pattern.startsWith('\\b'));
+    assert.ok(keyPatterns.length > 0, 'mcp-audit.json lists no pattern that opens with a word boundary');
+    const texts = Object.values(KEYS).flatMap((key) => NON_ASCII.map((before) => envBlock(`${before}${key}`)));
+    const script = [
+      'import json, re, sys',
+      'data = json.load(sys.stdin)',
+      'found = lambda text, flags: any(re.search(p, text, flags) for p in data["patterns"])',
+      'print(json.dumps({',
+      '  "unicode": [t for t in data["texts"] if found(t, 0)],',
+      '  "ascii": [t for t in data["texts"] if not found(t, re.ASCII)],',
+      '}))',
+    ].join('\n');
+    const run = spawnSync('python3', ['-I', '-c', script], {
+      input: JSON.stringify({ patterns: keyPatterns, texts }),
+      encoding: 'utf8',
+    });
+    assert.equal(run.status, 0, run.stderr);
+    const { unicode, ascii } = JSON.parse(run.stdout);
+    assert.deepEqual(unicode, [], 'keys Python finds after a non-ASCII letter or digit');
+    assert.deepEqual(ascii, [], 'keys Python misses with re.ASCII');
+  },
+);
 
 test('a key behind an escape or an encoded character is found in the decoded text only', () => {
   const flagged = [];
@@ -173,13 +217,32 @@ test('a key behind an escape or an encoded character is found in the decoded tex
   assert.deepEqual(missed, [], 'keys that no pattern finds in the decoded text');
 });
 
+test('a key behind an escape is still found when it is stored under a credential name', () => {
+  const missed = [];
+  for (const [prefix, key] of Object.entries(KEYS)) {
+    if (!found(JSON.stringify({ API_KEY: `line1\n${key}` }))) missed.push(prefix);
+  }
+  assert.deepEqual(missed, [], 'stored keys after an escape that no pattern finds');
+});
+
 test('the README says where a key has to start and how to find one that does not', () => {
   const text = auditSection();
   assert.match(
     text,
-    /directly follows a letter, a digit or an underscore does not match/,
-    'the section does not say that a key glued to a word character is not matched',
+    /directly follows an ASCII letter, digit or underscore does not match/,
+    'the section does not say that a key glued to an ASCII word character is not matched',
   );
+  assert.match(
+    text,
+    /Python's `re` also counts other Unicode letters and digits unless the pattern is compiled with `re\.ASCII`/,
+    'the section does not say where Python and JavaScript differ on a word boundary',
+  );
+  assert.match(
+    text,
+    /A key that only the prefix patterns can find, one not stored under a credential name, is also missed/,
+    'the section does not limit the escape case to keys the prefix patterns alone can find',
+  );
+  assert.match(text, /`\{"API_KEY":"line1\\nsk-\.\.\."\}`/, 'the section gives no example of a stored key after an escape');
   assert.match(text, /`"line1\\nsk-\.\.\."`/, 'the section gives no example of a key after an escape');
   assert.match(text, /`\?q=key%3Dsk-\.\.\.`/, 'the section gives no example of a key after an encoded character');
   assert.match(text, /on the decoded text/, 'the section does not say to run the patterns on the decoded text');
