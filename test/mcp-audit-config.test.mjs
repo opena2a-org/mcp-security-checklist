@@ -67,6 +67,7 @@ const SECTION_SENTENCES = [
   [
     '[mcp-audit.schema.json](./mcp-audit.schema.json) is a JSON Schema (draft 2020-12) for the configuration: every key, its type and its allowed values.',
     'Validate your copy against it to catch a misspelled key or a value of the wrong type; the schema allows a `$schema` key, so the copy can name the schema for an editor that validates JSON.',
+    "Draft 2020-12 treats `format` as an annotation unless a validator is set to assert it, so turn format assertion on for the schema's `uri` and `regex` formats to reject a remediation link that is not a URL or a secret pattern that does not compile.",
     '`test/mcp-audit-schema.test.mjs` (`node --test`) validates `mcp-audit.json` and the excerpt above against the schema.',
   ],
   [

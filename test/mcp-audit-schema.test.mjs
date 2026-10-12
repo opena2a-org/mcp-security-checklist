@@ -124,6 +124,13 @@ function readmeExample(heading) {
   return JSON.parse(block[1]);
 }
 
+// A file or directory name in code quotes: a name with the extension of a document, a
+// configuration or a script, or a name that ends in a slash. Any other token with a dot in
+// it is not a file name, such as the version `1.0.x`, the key `checks.credentials` or a
+// domain.
+const FILE_NAME = /`([\w.-]+\.(?:cjs|js|json|md|mjs|py|sh|toml|ts|txt|ya?ml)|[\w-]+\/)`/g;
+const namedFiles = (text) => [...text.matchAll(FILE_NAME)].map(([, path]) => path);
+
 test('the schema is draft 2020-12 and uses only keywords this validator applies', () => {
   assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
   for (const node of subschemas(schema)) {
@@ -212,9 +219,33 @@ test('the schema rejects a configuration with a mistake in it', () => {
 });
 
 test('every file the security policy names is in the repository', () => {
-  const named = [...policy.matchAll(/`([\w.-]+\.[a-z]+|[\w-]+\/)`/g)].map(([, path]) => path);
+  const named = namedFiles(policy);
   assert.ok(named.includes('mcp-audit.schema.json'), 'SECURITY.md does not name the schema');
   for (const path of named) {
     assert.ok(existsSync(new URL(`../${path}`, import.meta.url)), `SECURITY.md names ${path}, which does not exist`);
+  }
+});
+
+test('the file-name check reads a version, a configuration key or a domain in code quotes as no file name', () => {
+  assert.deepEqual(namedFiles('`README.md`, `mcp-audit.schema.json`, `audit.sh`, `scan.py`, `ci.yml` and `test/`'), [
+    'README.md', 'mcp-audit.schema.json', 'audit.sh', 'scan.py', 'ci.yml', 'test/',
+  ]);
+  // Each of these has a dot and a lowercase suffix, and is not a file.
+  assert.deepEqual(namedFiles('`1.0.x`, `checks.credentials`, `target.url`, `agentpwn.com` and `main`'), []);
+  // The security policy with a version range added to it still names only files that exist.
+  const missing = namedFiles(`${policy}\nVersions \`1.0.x\` receive security fixes.\n`)
+    .filter((path) => !existsSync(new URL(`../${path}`, import.meta.url)));
+  assert.deepEqual(missing, []);
+});
+
+test('README.md names each format the schema uses and says a validator has to assert it', () => {
+  const formats = new Set([...subschemas(schema)].flatMap(({ format }) => (typeof format === 'string' ? [format] : [])));
+  assert.notEqual(formats.size, 0, 'the schema uses no format');
+  const sentence = readme.replace(/\s+/g, ' ').split(/(?<=\.) /).find((text) => text.includes('format assertion'));
+  assert.ok(sentence, 'README.md does not say that a format holds only under format assertion');
+  assert.match(sentence, /`format`/, `does not name the keyword: ${sentence}`);
+  assert.match(sentence, /\bannotation\b/, `does not say a format is an annotation by default: ${sentence}`);
+  for (const format of formats) {
+    assert.ok(sentence.includes(`\`${format}\``), `does not name the ${format} format: ${sentence}`);
   }
 });
