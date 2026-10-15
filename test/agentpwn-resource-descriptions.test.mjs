@@ -115,8 +115,9 @@ const QUOTED_VALUE = /=\s*(["'])/y;
 // Where the part of an HTML block that starts at index i and shows no text ends, or -1
 // when what starts there shows. White space shows none, written as itself or as a
 // character reference, and nor does markup: a comment up to its end marker, a processing
-// instruction, declaration or CDATA section up to its first >, and a tag up to its first
-// > outside a quoted attribute value. Markup that has no end is text.
+// instruction, declaration or CDATA section up to its first >, an end tag whose name does
+// not start with a letter up to its first >, and a tag up to its first > outside a quoted
+// attribute value. Markup that has no end is text.
 function hiddenEnd(html, i) {
   if (/\s/.test(html[i])) return i + 1;
   SPACE_REFERENCE.lastIndex = i;
@@ -139,6 +140,12 @@ function hiddenEnd(html, i) {
       found = end.exec(html);
     }
     return found ? end.lastIndex : -1;
+  }
+  // A page reads </ followed by a character that is not a letter as a comment up to the
+  // first >, so </>, </ x> and </1> show nothing. A </ that ends the block is text.
+  if (/^<\/[^a-z]/i.test(html.slice(i, i + 3))) {
+    const end = html.indexOf('>', i + 2);
+    return end === -1 ? -1 : end + 1;
   }
   if (!/^<\/?[a-z]/i.test(html.slice(i, i + 3))) return -1;
   for (let j = i + 1; j < html.length; j++) {
@@ -671,8 +678,26 @@ test('the HTML text check ends a comment at --!> as well as at -->', () => {
   assert.deepEqual(guidesListedAsTesting(`${environments} -->\n${guides}\n`), [`${environments} --> ${guides}`]);
 });
 
+test('the HTML text check ends </ and a character that is not a letter at the first >', () => {
+  // A page reads each of these as a comment up to its first >, so none shows text.
+  for (const html of ['</>', '</ x>', '</1>', '</\nx>', '<div></ x></div>', '<div></1></div>', '<div></></div>']) {
+    assert.equal(showsText(html), false, `${html} shows text`);
+  }
+  // What follows that first > shows, even a > inside quotes, and so does a </ that has no >.
+  for (const html of ['</ x>y', '</1 a>b>', '</>x', '</ x title=">">', '</ x', '</']) {
+    assert.equal(showsText(html), true, `${html} shows no text`);
+  }
+  // An HTML block that holds only such markup leaves the lead-in above it to the list below it.
+  const environments = 'For safe, controlled testing environments:';
+  const guides = '- [agentpwn.com/tools](https://agentpwn.com/tools) -- security guides for AI tools and MCP servers';
+  for (const html of ['<div></ x></div>', '<div></1></div>', '<div></></div>']) {
+    const text = `${environments}\n\n${html}\n\n${guides}\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [`${environments} ${guides}`], `${html} hides the lead-in`);
+  }
+});
+
 test('the HTML text check reads a long run of unterminated markup in linear time', () => {
-  for (const markup of ['<a', '<!a', '</a', '<?', '<!--', '<![CDATA[', '<a b="']) {
+  for (const markup of ['<a', '<!a', '</a', '</1', '<?', '<!--', '<![CDATA[', '<a b="']) {
     // An odd count leaves the last quoted value of '<a b="' with no closing quote.
     const html = markup.repeat(2 * Math.ceil(100000 / markup.length) + 1);
     const start = performance.now();
