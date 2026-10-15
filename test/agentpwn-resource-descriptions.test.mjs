@@ -86,8 +86,13 @@ function expandTabs(line) {
   return spaced + line.slice(structure.length);
 }
 
-// The last sentence of a paragraph or heading.
-const lastSentence = (text) => text.split(/(?<=[.:!?]) /).at(-1);
+// The last sentence of a paragraph or heading. A part with no letter or digit, such as a
+// --> that a page shows after a comment that --!> ends, is read with the sentence before it.
+const lastSentence = (text) => {
+  const sentences = text.split(/(?<=[.:!?]) /);
+  const last = sentences.findLastIndex((sentence) => /[\p{L}\p{N}]/u.test(sentence));
+  return sentences.slice(Math.max(last, 0)).join(' ');
+};
 
 // The named character references that stand for white space. Every other named reference
 // is read as text, even one for a character that shows nothing, such as &ZeroWidthSpace;,
@@ -97,12 +102,13 @@ const SPACE_REFERENCE =
   /&(?:Tab;|NewLine;|nbsp;?|NonBreakingSpace;|ensp;|emsp;|emsp13;|emsp14;|numsp;|puncsp;|thinsp;|ThinSpace;|hairsp;|VeryThinSpace;|MediumSpace;|ThickSpace;)/y;
 const NUMERIC_REFERENCE = /&#(?:[xX]([\da-fA-F]+)|(\d+));?/y;
 // The markup a page hides up to an end marker, each with that marker. A comment ends at
-// -->. A processing instruction, a declaration and a CDATA section in any letter case end
-// at their first >: a page reads a CDATA section as one only inside SVG or MathML, and
-// anywhere else as a comment that the first > ends. The end marker is looked for from
-// right after the <! or <? that opens the markup, so a comment can end in the dashes that
-// open it: a page reads <!--> and <!---> as an empty comment.
-const MARKED = [['<!--', '-->'], ['<?', '>'], ['<!', '>']];
+// --> or --!>. A processing instruction, a declaration and a CDATA section in any letter
+// case end at their first >: a page reads a CDATA section as one only inside SVG or
+// MathML, and anywhere else as a comment that the first > ends. The end marker is looked
+// for from right after the <! or <? that opens the markup, so a comment can end in the
+// dashes that open it: a page reads <!--> and <!---> as an empty comment. A --!> that
+// starts in those dashes does not end it, as in <!--!> and <!---!>.
+const MARKED = [['<!--', /--!?>/g], ['<?', />/g], ['<!', />/g]];
 // The = of an attribute and the quote that opens its value.
 const QUOTED_VALUE = /=\s*(["'])/y;
 
@@ -125,8 +131,14 @@ function hiddenEnd(html, i) {
   }
   const marked = MARKED.find(([open]) => html.startsWith(open, i));
   if (marked) {
-    const end = html.indexOf(marked[1], i + 2);
-    return end === -1 ? -1 : end + marked[1].length;
+    const [, end] = marked;
+    end.lastIndex = i + 2;
+    let found = end.exec(html);
+    if (found && found[0] === '--!>' && found.index < i + 4) {
+      end.lastIndex = i + 4;
+      found = end.exec(html);
+    }
+    return found ? end.lastIndex : -1;
   }
   if (!/^<\/?[a-z]/i.test(html.slice(i, i + 3))) return -1;
   for (let j = i + 1; j < html.length; j++) {
@@ -636,6 +648,27 @@ test('the HTML text check ends a comment at a > right after the dashes that open
     const text = `${environments}\n\n${html}\n${guides}\n`;
     assert.deepEqual(guidesListedAsTesting(text), [`${environments} ${guides}`], `${html} hides the lead-in`);
   }
+});
+
+test('the HTML text check ends a comment at --!> as well as at -->', () => {
+  // A page ends a comment at --!>, so a comment that ends there shows no text.
+  for (const html of ['<!-- x --!>', '<!----!>', '<!-- x --!>\n<!-- y -->']) {
+    assert.equal(showsText(html), false, `${html} shows text`);
+  }
+  // What follows that > shows, a --> after it too.
+  for (const html of ['<!-- x --!>x', '<!----!>x', '<!-- x --!>-->']) {
+    assert.equal(showsText(html), true, `${html} shows no text`);
+  }
+  // A --!> in the dashes that open a comment does not end it: the comment ends at the -->.
+  for (const html of ['<!--!>x-->', '<!---!>x-->']) {
+    assert.equal(showsText(html), false, `${html} shows text`);
+  }
+  // A lead-in after a --!> shows, and the --> the page shows after it is read with it.
+  const environments = 'For safe, controlled testing environments:';
+  const guides = '- [agentpwn.com/tools](https://agentpwn.com/tools) -- security guides for AI tools and MCP servers';
+  const html = `<!-- x --!>${environments} -->`;
+  assert.deepEqual(guidesListedAsTesting(`For written guidance:\n\n${html}\n${guides}\n`), [`${html} ${guides}`]);
+  assert.deepEqual(guidesListedAsTesting(`${environments} -->\n${guides}\n`), [`${environments} --> ${guides}`]);
 });
 
 test('the HTML text check reads a long run of unterminated markup in linear time', () => {
