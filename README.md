@@ -14,20 +14,20 @@ MCP enables AI assistants to interact with external tools and data sources. This
 
 This repository is the checklist itself (below) plus a reference audit
 configuration ([mcp-audit.json](./mcp-audit.json)) and its schema
-([mcp-audit.schema.json](./mcp-audit.schema.json)). Work through the checklist
-against your MCP deployment. For an automated scan of an MCP server project,
-use HackMyAgent:
+([mcp-audit.schema.json](./mcp-audit.schema.json)). Work through the checklist,
+starting at [1. Transport Layer Security](#1-transport-layer-security), against
+your MCP deployment. For an automated scan of an MCP server project, use
+HackMyAgent:
 
 ```bash
 # Quick scan of a local MCP server project
 npx hackmyagent check ./my-mcp-server/
 ```
 
-Output from hackmyagent 0.33.2 on a two-file stdio MCP server, captured
-2026-10-09 (home directory shown as `~`):
+What `npx hackmyagent check ./my-mcp-server/` prints ([full output](docs/captures/hackmyagent-check.txt)):
 
 ```text
-  ~/my-mcp-server  unknown · local · 2 files analyzed
+  /private/tmp/my-mcp-server  unknown · local · 2 files analyzed
   No issues in the quick-scan matrix
 
   Quick scan  ━━━━━━━━━━━━━━━━━━━━ 100/100
@@ -41,9 +41,9 @@ Output from hackmyagent 0.33.2 on a two-file stdio MCP server, captured
 
 
   ── Next Steps ─────────────────────────────────────────────────
-  Governance scan:      hackmyagent scan-soul ~/my-mcp-server
+  Governance scan:      hackmyagent scan-soul /private/tmp/my-mcp-server
   Red-team test:        hackmyagent attack --local
-  AI analysis:          hackmyagent check ~/my-mcp-server --nanomind  (attack vectors + targeted remediation)
+  AI analysis:          hackmyagent check /private/tmp/my-mcp-server --nanomind  (attack vectors + targeted remediation)
   All commands:         hackmyagent --help
 ```
 
@@ -54,12 +54,11 @@ git hygiene, MCP config, file permissions), run:
 npx hackmyagent secure ./my-mcp-server/
 ```
 
-The full audit's MCP checks read an MCP configuration file (for example a
-`.mcp.json` that registers the server), not the server source. On a project
-that holds only server code, such as the two-file example above, hackmyagent
-0.33.2 lists MCP on the `Unexamined` line and reports no MCP findings. Add
-the configuration your clients use to launch the server (a `.mcp.json` entry
-with its `command` and `args`) to bring MCP into the audit.
+`secure` exits 1 when it finds a critical or high issue. The full audit's MCP
+checks read an MCP configuration file (for example a `.mcp.json` that
+registers the server), not the server source. Add the configuration your
+clients use to launch the server (a `.mcp.json` entry with its `command` and
+`args`) to bring MCP into the audit.
 
 ## Security Checklist
 
@@ -159,93 +158,6 @@ with its `command` and `args`) to bring MCP into the audit.
 - [ ] Communication plan for security incidents involving AI tools
 - [ ] Regular tabletop exercises including MCP compromise scenarios
 
-## Reference Audit Configuration
-
-`mcp-audit.json` is a reference configuration that enumerates the checks a
-thorough MCP audit should automate. It is illustrative, not consumed by a
-tool shipped from this repository. This excerpt keeps every check group and
-leaves out most of their settings:
-
-```json
-{
-  "version": "1.0.0",
-  "audit": {
-    "target": {
-      "url": "https://your-mcp-server.example.com",
-      "transport": "streamable-http"
-    },
-    "checks": {
-      "transport": { "enabled": true, "requireTls13": true },
-      "authentication": { "enabled": true, "requireTokenAuth": true },
-      "inputValidation": { "enabled": true, "requireJsonSchemaValidation": true },
-      "sandboxing": { "enabled": true, "checkContainerIsolation": true },
-      "credentials": { "enabled": true, "scanConfigForSecrets": true },
-      "promptInjection": { "enabled": true, "scanToolDescriptions": true },
-      "logging": { "enabled": true, "checkAuditLogging": true },
-      "network": { "enabled": true, "checkRateLimiting": true },
-      "supplyChain": { "enabled": true, "checkPinnedDependencies": true },
-      "incidentResponse": { "enabled": true, "checkToolKillSwitch": true }
-    },
-    "reporting": {
-      "format": "sarif",
-      "severityThreshold": "medium"
-    }
-  }
-}
-```
-
-See [mcp-audit.json](./mcp-audit.json) for the complete configuration.
-In it, `target.protocolVersion` names the MCP revision under audit. MCP
-identifies each revision by its date (`YYYY-MM-DD`). From `2026-07-28` on,
-every request declares that date in its `_meta` field, and over HTTP also in
-the `MCP-Protocol-Version` header. In revisions `2025-11-25` and earlier, a
-client and server agree on it in the `initialize` handshake. The example uses
-`2026-07-28`, the current revision; set it to the revision your server
-implements, as listed in the
-[MCP versioning page](https://modelcontextprotocol.io/specification/versioning).
-
-[mcp-audit.schema.json](./mcp-audit.schema.json) is a JSON Schema (draft
-2020-12) for the configuration: every key, its type and its allowed values.
-Validate your copy against it to catch a misspelled key or a value of the
-wrong type; the schema allows a `$schema` key, so the copy can name the schema
-for an editor that validates JSON. Draft 2020-12 treats `format` as an
-annotation unless a validator is set to assert it, so turn format assertion on
-for the schema's `uri` and `regex` formats to reject a remediation link that is
-not a URL or a secret pattern that does not compile.
-`test/mcp-audit-schema.test.mjs` (`node --test`) validates `mcp-audit.json` and
-the excerpt above against the schema.
-
-The `secretPatterns` under `checks.credentials` back the checklist item "No
-credentials stored in MCP configuration files". They match:
-
-- a quoted value stored under a name that ends in `api_key`, `api-key`,
-  `apikey`, `secret`, `token`, `password` or `credential`, in any letter case,
-  as in the `"env": {"API_KEY": "..."}` block of a `.mcp.json`. A value that
-  starts with `${` refers to an environment variable and does not match.
-- keys that start with `sk-` (including `sk-proj-` and `sk-ant-`), GitHub
-  tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) and AWS access
-  key IDs (`AKIA`, `ASIA`). The prefix has to start a word: a key that directly
-  follows an ASCII letter, digit or underscore does not match. This keeps a
-  word that only ends in a prefix, such as `task-` or `disk-`, from being read
-  as the start of an `sk-` key. Python's `re` also counts other Unicode letters
-  and digits unless the pattern is compiled with `re.ASCII`, so a key right
-  after `é`, a Cyrillic letter or an Arabic-Indic digit matches in JavaScript
-  and not in Python.
-
-A credential with no known prefix that sits under another name, or in `args`,
-is not matched; extend the list for the names your servers use. A key that
-only the prefix patterns can find, one not stored under a credential name, is
-also missed when an escape or an encoded character puts a letter or a digit
-right before it: in the file text `"line1\nsk-..."` the key follows the `n` of
-`\n`, and in `?q=key%3Dsk-...` it follows the `D` of `%3D`. Under a credential
-name the key is still found, as in `{"API_KEY":"line1\nsk-..."}`. To find such
-a key, run the patterns on the decoded text: the parsed JSON string or the
-decoded URL.
-The patterns carry no inline flags, lookarounds or backreferences, so
-JavaScript and Python compile them as written. Match them case-sensitively.
-`test/secret-patterns.test.mjs` runs each pattern against fake credentials
-(`node --test`).
-
 ## Testing Your Defenses
 
 The best way to verify your MCP security posture is to test against real attack patterns.
@@ -260,27 +172,18 @@ The best way to verify your MCP security posture is to test against real attack 
 The agentpwn [MCP exploitation](https://agentpwn.com/attacks/mcp-exploitation)
 set has three tests: Tool Discovery, Tool Injection and Cross-Tool Exploit
 Chain. "No dedicated test" means none of the three is built for that
-category; where one comes near, the row names it as "Closest". Cover the
-category with your own test cases, starting from the checklist items in
-[3. Input Validation and Sanitization](#3-input-validation-and-sanitization),
-[5. Credential Management](#5-credential-management) and
-[6. Prompt Injection Defense](#6-prompt-injection-defense).
+category; where one comes near, the row names it as "Closest".
 
-## Learning Resources
+## Documentation
 
+- [Reference audit configuration](docs/reference-audit-configuration.md) -- the `mcp-audit.json` excerpt, its schema and `secretPatterns`, the full audit of a project that holds only server code, and the attack categories with no dedicated test
 - [AI Agent Security guide](https://agentpwn.com/learn) -- guide to attacks on AI agents, one section per attack category, including a section on MCP exploitation
 - [OASB Standard](https://oasb.ai) -- Open Agent Security Benchmark for evaluating agent security
 - [Agent Threat Matrix](https://github.com/opena2a-standards/agent-threat-matrix) -- MITRE ATT&CK-style framework for AI agent threats
-
-## Related Projects
-
 - [HackMyAgent](https://github.com/opena2a-org/hackmyagent) -- automated security scanner for AI agents
 - [Secretless AI](https://github.com/opena2a-org/secretless-ai) -- credential isolation for AI development environments
-- [OpenA2A](https://github.com/opena2a-org/opena2a) -- open Agent-to-Agent protocol with security built in
-
-## Contributing
-
-Contributions welcome. Please open an issue or PR if you identify missing checklist items or have improvements to the audit configuration.
+- [OpenA2A](https://github.com/opena2a-org/opena2a) -- CLI that checks an AI project across credentials, shadow agents, MCP servers and dependencies
+- [Contributing](CONTRIBUTING.md) -- missing checklist items and improvements to the audit configuration
 
 ## License
 

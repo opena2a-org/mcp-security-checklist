@@ -1,5 +1,5 @@
 // Checks the secretPatterns in mcp-audit.json against fake credentials, and what
-// README.md says about where a key has to start.
+// docs/reference-audit-configuration.md says about where a key has to start.
 // Run from the repository root: node --test
 
 import { test } from 'node:test';
@@ -12,15 +12,15 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const { secretPatterns } = JSON.parse(read('../mcp-audit.json')).audit.checks.credentials;
 // An MCP client configuration: two servers store a credential, one refers to a variable.
 const sample = read('./fixtures/sample.mcp.json');
-const readme = read('../README.md');
+const reference = read('../docs/reference-audit-configuration.md');
 
-// The "Reference Audit Configuration" section of the README, up to the next "## "
+// The "Reference Audit Configuration" section of the reference page, up to the next "## "
 // heading, with each run of whitespace as one space.
 function auditSection() {
-  const start = readme.indexOf('## Reference Audit Configuration\n');
-  assert.notEqual(start, -1, 'README has no "## Reference Audit Configuration" section');
-  const next = readme.indexOf('\n## ', start + 1);
-  return readme.slice(start, next === -1 ? undefined : next).replace(/\s+/g, ' ');
+  const start = reference.indexOf('## Reference Audit Configuration\n');
+  assert.notEqual(start, -1, 'the reference page has no "## Reference Audit Configuration" section');
+  const next = reference.indexOf('\n## ', start + 1);
+  return reference.slice(start, next === -1 ? undefined : next).replace(/\s+/g, ' ');
 }
 
 // Each pattern is compiled as written, with no flags, so matching is case-sensitive.
@@ -213,7 +213,7 @@ test('a key behind an escape or an encoded character is found in the decoded tex
     if (!found(JSON.parse(json).script)) missed.push({ prefix, where: 'in the parsed JSON string' });
     if (!found(decodeURIComponent(url))) missed.push({ prefix, where: 'in the decoded URL' });
   }
-  assert.deepEqual(flagged, [], 'keys the README says the patterns miss');
+  assert.deepEqual(flagged, [], 'keys the reference page says the patterns miss');
   assert.deepEqual(missed, [], 'keys that no pattern finds in the decoded text');
 });
 
@@ -225,7 +225,7 @@ test('a key behind an escape is still found when it is stored under a credential
   assert.deepEqual(missed, [], 'stored keys after an escape that no pattern finds');
 });
 
-test('the README says where a key has to start and how to find one that does not', () => {
+test('the reference page says where a key has to start and how to find one that does not', () => {
   const text = auditSection();
   assert.match(
     text,
