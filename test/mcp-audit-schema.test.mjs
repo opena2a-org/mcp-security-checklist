@@ -124,11 +124,13 @@ function referenceExample(heading) {
   return JSON.parse(block[1]);
 }
 
-// A file or directory name in code quotes: a name with the extension of a document, a
-// configuration or a script, or a name that ends in a slash. Any other token with a dot in
-// it is not a file name, such as the version `1.0.x`, the key `checks.credentials` or a
-// domain.
-const FILE_NAME = /`([\w.-]+\.(?:cjs|js|json|md|mjs|py|sh|toml|ts|txt|ya?ml)|[\w-]+\/)`/g;
+// A file or directory path in code quotes: a name with the extension of a document, a
+// configuration or a script, or a name that ends in a slash, after any directory names
+// that each end in a slash, such as `test/fixtures/`. A directory name may start with a dot,
+// as `.github/` does, and has no other dot in it, so a domain with a path, such as
+// `agentpwn.com/learn`, is not a file name. Any other token with a dot in it is not a file
+// name either, such as the version `1.0.x`, the key `checks.credentials` or a domain.
+const FILE_NAME = /`((?:\.?[\w-]+\/)*[\w.-]+\.(?:cjs|js|json|md|mjs|py|sh|toml|ts|txt|ya?ml)|(?:\.?[\w-]+\/)+)`/g;
 const namedFiles = (text) => [...text.matchAll(FILE_NAME)].map(([, path]) => path);
 
 test('the schema is draft 2020-12 and uses only keywords this validator applies', () => {
@@ -236,6 +238,18 @@ test('the file-name check reads a version, a configuration key or a domain in co
   const missing = namedFiles(`${policy}\nVersions \`1.0.x\` receive security fixes.\n`)
     .filter((path) => !existsSync(new URL(`../${path}`, import.meta.url)));
   assert.deepEqual(missing, []);
+});
+
+test('the file-name check reads a code-quoted path with a directory in it as a file name', () => {
+  assert.deepEqual(namedFiles('`test/missing.mjs`, `test/fixtures/` and `.github/workflows/ci.yml`'), [
+    'test/missing.mjs', 'test/fixtures/', '.github/workflows/ci.yml',
+  ]);
+  // A domain with a path is not a file name.
+  assert.deepEqual(namedFiles('`agentpwn.com/learn`, `agentpwn.com/tools/` and `example.com/install.sh`'), []);
+  // The security policy with a missing file named by its directory names that file.
+  const missing = namedFiles(`${policy}\nThe tests run \`test/missing.mjs\`.\n`)
+    .filter((path) => !existsSync(new URL(`../${path}`, import.meta.url)));
+  assert.deepEqual(missing, ['test/missing.mjs']);
 });
 
 test('docs/reference-audit-configuration.md names each format the schema uses and says a validator has to assert it', () => {
