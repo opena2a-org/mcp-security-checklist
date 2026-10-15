@@ -1,4 +1,5 @@
-// Checks the MCP protocol version named in mcp-audit.json and what README.md says about it.
+// Checks the MCP protocol version named in mcp-audit.json and what
+// docs/reference-audit-configuration.md says about it.
 // Run from the repository root: node --test
 
 import { test } from 'node:test';
@@ -6,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const config = JSON.parse(readFileSync(new URL('../mcp-audit.json', import.meta.url), 'utf8'));
-const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+const reference = readFileSync(new URL('../docs/reference-audit-configuration.md', import.meta.url), 'utf8');
 
 // MCP names each revision of its specification by date (YYYY-MM-DD). Add a revision
 // here once it is published at https://modelcontextprotocol.io/specification/versioning.
@@ -23,12 +24,13 @@ function isCalendarDate(value) {
   return date.toISOString().slice(0, 10) === value;
 }
 
-// The "Reference Audit Configuration" section of the README, up to the next "## " heading.
+// The "Reference Audit Configuration" section of the reference page, up to the next "## "
+// heading.
 function auditSection() {
-  const start = readme.indexOf('## Reference Audit Configuration\n');
-  assert.notEqual(start, -1, 'README has no "## Reference Audit Configuration" section');
-  const next = readme.indexOf('\n## ', start + 1);
-  return readme.slice(start, next === -1 ? undefined : next);
+  const start = reference.indexOf('## Reference Audit Configuration\n');
+  assert.notEqual(start, -1, 'the reference page has no "## Reference Audit Configuration" section');
+  const next = reference.indexOf('\n## ', start + 1);
+  return reference.slice(start, next === -1 ? undefined : next);
 }
 
 // A sentence that names the handshake with one of three word stems: "initiali[sz]"
@@ -41,11 +43,11 @@ const HANDSHAKE = /initiali[sz]|handshake|negotiat/i;
 // with or without code quotes, "and earlier".
 const HANDSHAKE_SCOPE = new RegExp(`\`?${LAST_HANDSHAKE_REVISION}\`? and earlier`);
 
-// The README paragraph that explains target.protocolVersion, sentence by sentence. It is
+// The reference page paragraph that explains target.protocolVersion, sentence by sentence. It is
 // compared whole because the handshake filter above misses a sentence that uses none of
 // its three word stems.
 const PROTOCOL_VERSION_SENTENCES = [
-  'See [mcp-audit.json](./mcp-audit.json) for the complete configuration.',
+  'See [mcp-audit.json](../mcp-audit.json) for the complete configuration.',
   'In it, `target.protocolVersion` names the MCP revision under audit.',
   'MCP identifies each revision by its date (`YYYY-MM-DD`).',
   'From `2026-07-28` on, every request declares that date in its `_meta` field, and over HTTP also in the `MCP-Protocol-Version` header.',
@@ -65,7 +67,7 @@ const SECTION_SENTENCES = [
   ],
   PROTOCOL_VERSION_SENTENCES,
   [
-    '[mcp-audit.schema.json](./mcp-audit.schema.json) is a JSON Schema (draft 2020-12) for the configuration: every key, its type and its allowed values.',
+    '[mcp-audit.schema.json](../mcp-audit.schema.json) is a JSON Schema (draft 2020-12) for the configuration: every key, its type and its allowed values.',
     'Validate your copy against it to catch a misspelled key or a value of the wrong type; the schema allows a `$schema` key, so the copy can name the schema for an editor that validates JSON.',
     "Draft 2020-12 treats `format` as an annotation unless a validator is set to assert it, so turn format assertion on for the schema's `uri` and `regex` formats to reject a remediation link that is not a URL or a secret pattern that does not compile.",
     '`test/mcp-audit-schema.test.mjs` (`node --test`) validates `mcp-audit.json` and the excerpt above against the schema.',
@@ -166,13 +168,13 @@ test('the date check rejects version labels that are not dates', () => {
   assert.equal(isCalendarDate('2026-07-28'), true);
 });
 
-test('the README says protocolVersion names the revision under audit', () => {
+test('the reference page says protocolVersion names the revision under audit', () => {
   const text = auditSection();
   assert.match(text, /`(?:target\.)?protocolVersion`/, 'the section does not mention protocolVersion');
   assert.match(text, /revision/i, 'the section does not say protocolVersion names a revision');
 });
 
-test('the README limits the initialize handshake to the revisions that have one', () => {
+test('the reference page limits the initialize handshake to the revisions that have one', () => {
   const unscoped = unscopedHandshakeSentences(auditSection());
   assert.deepEqual(
     unscoped,
@@ -181,21 +183,21 @@ test('the README limits the initialize handshake to the revisions that have one'
   );
 });
 
-test('the README protocolVersion paragraph says how each revision carries its version, and nothing more', () => {
+test('the reference page protocolVersion paragraph says how each revision carries its version, and nothing more', () => {
   assert.deepEqual(protocolVersionSentences(auditSection()), PROTOCOL_VERSION_SENTENCES);
 });
 
-test('the README names the revision that mcp-audit.json sets in target.protocolVersion', () => {
+test('the reference page names the revision that mcp-audit.json sets in target.protocolVersion', () => {
   const version = config.audit.target.protocolVersion;
   const named = exampleRevision(auditSection());
   assert.equal(
     named,
     version,
-    `README.md says the example uses ${named}, but mcp-audit.json sets target.protocolVersion to ${version}`,
+    `docs/reference-audit-configuration.md says the example uses ${named}, but mcp-audit.json sets target.protocolVersion to ${version}`,
   );
 });
 
-test('the example revision check reads the revision from the README sentence, not from mcp-audit.json', () => {
+test('the example revision check reads the revision from the reference page sentence, not from mcp-audit.json', () => {
   const paragraph = 'In it, `target.protocolVersion` names the MCP revision under audit. The example uses\n`2025-11-25`, an earlier revision.';
   assert.equal(exampleRevision(paragraph), '2025-11-25');
 });
@@ -234,7 +236,7 @@ test('the paragraph split drops a first line only when it is the section heading
   assert.deepEqual(paragraphs(`## Reference Audit Configuration\n${sentence}`), [sentence]);
 });
 
-test('the README section has only the paragraphs, list items and sentences it is known to have', () => {
+test('the reference page section has only the paragraphs, list items and sentences it is known to have', () => {
   assert.deepEqual(sectionSentences(auditSection()), SECTION_SENTENCES);
 });
 
@@ -301,7 +303,7 @@ function checkStemlessKnownParagraph(section) {
     false,
     'the handshake filter now matches a sentence without its three word stems; update the HANDSHAKE comment',
   );
-  // How each paragraph and list item of the section ends in the README, in order. The
+  // How each paragraph and list item of the section ends on the reference page, in order. The
   // sentence is added on a new line after each.
   const endings = [
     'leaves out most of their settings:',

@@ -1,5 +1,6 @@
 // Checks the "Testing Your Defenses" table and the links in README.md, and that the
-// configuration excerpt under "Reference Audit Configuration" matches mcp-audit.json.
+// configuration excerpt under "Reference Audit Configuration" in
+// docs/reference-audit-configuration.md matches mcp-audit.json.
 // Run from the repository root: node --test
 
 import { test } from 'node:test';
@@ -8,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 
 const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+const reference = readFileSync(new URL('../docs/reference-audit-configuration.md', import.meta.url), 'utf8');
 const auditConfig = JSON.parse(readFileSync(new URL('../mcp-audit.json', import.meta.url), 'utf8'));
 
 const NO_TEST = 'No dedicated test';
@@ -49,11 +51,11 @@ const KNOWN_HOMES = [
   },
 ];
 
-function section(heading) {
-  const start = readme.indexOf(`## ${heading}\n`);
-  assert.notEqual(start, -1, `README has no "## ${heading}" section`);
-  const next = readme.indexOf('\n## ', start + 1);
-  return readme.slice(start, next === -1 ? undefined : next);
+function section(heading, text = readme, name = 'README') {
+  const start = text.indexOf(`## ${heading}\n`);
+  assert.notEqual(start, -1, `${name} has no "## ${heading}" section`);
+  const next = text.indexOf('\n## ', start + 1);
+  return text.slice(start, next === -1 ? undefined : next);
 }
 
 // A "### " checklist section, up to the next heading of level 2 or 3. A "# " line in a
@@ -391,9 +393,9 @@ test('the label check flags an address in a label that names another destination
 });
 
 test('a link labelled with a known resource points at where that resource lives', () => {
-  const resources = links(section('Learning Resources'));
+  const resources = links(section('Documentation'));
   for (const { label } of KNOWN_HOMES) {
-    assert.ok(resources.some((link) => link.label === label), `"Learning Resources" has no [${label}] link`);
+    assert.ok(resources.some((link) => link.label === label), `"Documentation" has no [${label}] link`);
   }
   const offenders = links(readme).filter(wrongHome).map(({ label, href }) => `[${label}](${href})`);
   assert.deepEqual(offenders, [], 'links to a known resource that do not point at its home');
@@ -461,11 +463,11 @@ const LEARN_PAGE = 'https://agentpwn.com/learn';
 // Words that would present the page as a course.
 const COURSE_CLAIM = /\b(?:course|interactive|lessons?|exercises?|quiz(?:zes)?|fundamentals)\b/i;
 
-test('the Learning Resources entry for the agentpwn learn page describes a guide, not a course', () => {
-  const entries = section('Learning Resources')
+test('the Documentation entry for the agentpwn learn page describes a guide, not a course', () => {
+  const entries = section('Documentation')
     .split('\n')
     .filter((line) => links(line).some(({ href }) => href === LEARN_PAGE));
-  assert.equal(entries.length, 1, `expected one Learning Resources entry linking ${LEARN_PAGE}`);
+  assert.equal(entries.length, 1, `expected one Documentation entry linking ${LEARN_PAGE}`);
   const [entry] = entries;
   assert.doesNotMatch(entry, COURSE_CLAIM, `entry describes the page as a course: ${entry}`);
   assert.match(entry, /\bguide\b/i, `entry does not name the page as a guide: ${entry}`);
@@ -477,11 +479,11 @@ test('the Learning Resources entry for the agentpwn learn page describes a guide
 // or a documentation hub. A longer domain is a different one and is not matched.
 const SINGLE_TEST_PAGES = /(?<![\w-])(?:mcp-servers\.org|agent-docs\.io)(?!\.?[\w-])/i;
 
-test('Learning Resources does not list mcp-servers.org or agent-docs.io', () => {
-  const entries = section('Learning Resources')
+test('Documentation does not list mcp-servers.org or agent-docs.io', () => {
+  const entries = section('Documentation')
     .split('\n')
     .filter((line) => SINGLE_TEST_PAGES.test(line));
-  assert.deepEqual(entries, [], 'Learning Resources entries that point at a single test page');
+  assert.deepEqual(entries, [], 'Documentation entries that point at a single test page');
 });
 
 test('the single test page check finds the site in a link, a bare URL, an autolink or an HTML tag', () => {
@@ -522,12 +524,13 @@ function excerptMismatches(excerpt, full, path = '') {
   });
 }
 
-test('the configuration excerpt in the README is a shortened copy of mcp-audit.json', () => {
-  const blocks = [...section('Reference Audit Configuration').matchAll(/^```json\n([\s\S]*?)^```$/gm)];
+test('the configuration excerpt on the reference page is a shortened copy of mcp-audit.json', () => {
+  const audit = section('Reference Audit Configuration', reference, 'the reference page');
+  const blocks = [...audit.matchAll(/^```json\n([\s\S]*?)^```$/gm)];
   assert.equal(blocks.length, 1, 'expected one JSON block under "Reference Audit Configuration"');
   const excerpt = JSON.parse(blocks[0][1]);
   assert.deepEqual(excerptMismatches(excerpt, auditConfig), [], 'excerpt keys that are missing from mcp-audit.json or differ from it');
-  // The README says the excerpt keeps every check group.
+  // The reference page says the excerpt keeps every check group.
   assert.deepEqual(Object.keys(excerpt.audit?.checks ?? {}), Object.keys(auditConfig.audit.checks), 'check groups in the excerpt');
 });
 

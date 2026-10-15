@@ -1,4 +1,4 @@
-// Checks mcp-audit.json, and the excerpt of it in README.md, against
+// Checks mcp-audit.json, and the excerpt of it in docs/reference-audit-configuration.md, against
 // mcp-audit.schema.json.
 // Run from the repository root: node --test
 
@@ -10,7 +10,7 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const schema = JSON.parse(read('../mcp-audit.schema.json'));
 const config = JSON.parse(read('../mcp-audit.json'));
-const readme = read('../README.md');
+const reference = read('../docs/reference-audit-configuration.md');
 const policy = read('../SECURITY.md');
 
 // The repository installs no packages, so the validator below applies the subset of
@@ -115,11 +115,11 @@ function describedKeysMissing(node, value, path = '') {
   });
 }
 
-// The first JSON block under a README heading.
-function readmeExample(heading) {
-  const start = readme.indexOf(`## ${heading}\n`);
-  assert.notEqual(start, -1, `README has no "## ${heading}" section`);
-  const block = readme.slice(start).match(/```json\n([\s\S]*?)\n```/);
+// The first JSON block under a heading of the reference page.
+function referenceExample(heading) {
+  const start = reference.indexOf(`## ${heading}\n`);
+  assert.notEqual(start, -1, `the reference page has no "## ${heading}" section`);
+  const block = reference.slice(start).match(/```json\n([\s\S]*?)\n```/);
   assert.ok(block, `"## ${heading}" holds no JSON example`);
   return JSON.parse(block[1]);
 }
@@ -153,8 +153,8 @@ test('the schema describes no key that mcp-audit.json lacks, other than $schema'
   assert.deepEqual(describedKeysMissing(schema, config), ['/$schema']);
 });
 
-test('the configuration excerpt in README.md matches the schema', () => {
-  assert.deepEqual(validate(readmeExample('Reference Audit Configuration')), []);
+test('the configuration excerpt in docs/reference-audit-configuration.md matches the schema', () => {
+  assert.deepEqual(validate(referenceExample('Reference Audit Configuration')), []);
 });
 
 test('the schema rejects a configuration with a mistake in it', () => {
@@ -238,11 +238,11 @@ test('the file-name check reads a version, a configuration key or a domain in co
   assert.deepEqual(missing, []);
 });
 
-test('README.md names each format the schema uses and says a validator has to assert it', () => {
+test('docs/reference-audit-configuration.md names each format the schema uses and says a validator has to assert it', () => {
   const formats = new Set([...subschemas(schema)].flatMap(({ format }) => (typeof format === 'string' ? [format] : [])));
   assert.notEqual(formats.size, 0, 'the schema uses no format');
-  const sentence = readme.replace(/\s+/g, ' ').split(/(?<=\.) /).find((text) => text.includes('format assertion'));
-  assert.ok(sentence, 'README.md does not say that a format holds only under format assertion');
+  const sentence = reference.replace(/\s+/g, ' ').split(/(?<=\.) /).find((text) => text.includes('format assertion'));
+  assert.ok(sentence, 'the reference page does not say that a format holds only under format assertion');
   assert.match(sentence, /`format`/, `does not name the keyword: ${sentence}`);
   assert.match(sentence, /\bannotation\b/, `does not say a format is an annotation by default: ${sentence}`);
   for (const format of formats) {

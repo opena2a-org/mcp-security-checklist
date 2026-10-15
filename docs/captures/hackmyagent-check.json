@@ -1,0 +1,13 @@
+{
+  "command": "npx hackmyagent check ./my-mcp-server/",
+  "version": "hackmyagent 0.33.2",
+  "fixture": "two-file stdio MCP server (package.json and index.js using the MCP TypeScript SDK's StdioServerTransport), no .mcp.json",
+  "cwd": "/private/tmp",
+  "date": "2026-10-14",
+  "exitCode": 0,
+  "stream": "stdout",
+  "excerptLines": [
+    2,
+    19
+  ]
+}

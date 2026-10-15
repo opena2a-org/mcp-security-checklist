@@ -1,0 +1,20 @@
+
+  /private/tmp/my-mcp-server  unknown · local · 2 files analyzed
+  No issues in the quick-scan matrix
+
+  Quick scan  ━━━━━━━━━━━━━━━━━━━━ 100/100
+  Run `secure ./my-mcp-server/` for the full audit (adds credentials, git hygiene, MCP config, file permissions).
+
+  ── Observations ────────────────────────────────────────────
+  Surfaces    local project · 2 semantic artifacts · all 2 artifacts reached 0-2 of 7 analyzer families
+  Checks      2 semantic (NanoMind AST, 0-2 of 7 analyzer families) · 318 static not run (quick scan)
+  Categories  semantic artifact matrix only  (318 static checks not evaluated)
+  Verdict     No issues in the semantic artifact matrix. This did NOT evaluate credentials, git hygiene, MCP config, file permissions — run `secure ./my-mcp-server/` before trusting it.
+
+
+  ── Next Steps ─────────────────────────────────────────────────
+  Governance scan:      hackmyagent scan-soul /private/tmp/my-mcp-server
+  Red-team test:        hackmyagent attack --local
+  AI analysis:          hackmyagent check /private/tmp/my-mcp-server --nanomind  (attack vectors + targeted remediation)
+  All commands:         hackmyagent --help
+
