@@ -99,7 +99,9 @@ const NUMERIC_REFERENCE = /&#(?:[xX]([\da-fA-F]+)|(\d+));?/y;
 // The markup a page hides up to an end marker, each with that marker. A comment ends at
 // -->. A processing instruction, a declaration and a CDATA section in any letter case end
 // at their first >: a page reads a CDATA section as one only inside SVG or MathML, and
-// anywhere else as a comment that the first > ends.
+// anywhere else as a comment that the first > ends. The end marker is looked for from
+// right after the <! or <? that opens the markup, so a comment can end in the dashes that
+// open it: a page reads <!--> and <!---> as an empty comment.
 const MARKED = [['<!--', '-->'], ['<?', '>'], ['<!', '>']];
 // The = of an attribute and the quote that opens its value.
 const QUOTED_VALUE = /=\s*(["'])/y;
@@ -123,7 +125,7 @@ function hiddenEnd(html, i) {
   }
   const marked = MARKED.find(([open]) => html.startsWith(open, i));
   if (marked) {
-    const end = html.indexOf(marked[1], i + marked[0].length);
+    const end = html.indexOf(marked[1], i + 2);
     return end === -1 ? -1 : end + marked[1].length;
   }
   if (!/^<\/?[a-z]/i.test(html.slice(i, i + 3))) return -1;
@@ -616,6 +618,24 @@ test('the HTML text check ends a processing instruction, a declaration and a CDA
   const environments = 'For safe, controlled testing environments:';
   const guides = '- [agentpwn.com/tools](https://agentpwn.com/tools) -- security guides for AI tools and MCP servers';
   assert.deepEqual(guidesListedAsTesting(`${environments}\n\n<![CDATA[a>\nFor written guidance:]]>\n\n${guides}\n`), []);
+});
+
+test('the HTML text check ends a comment at a > right after the dashes that open it', () => {
+  // A page reads <!--> and <!---> as an empty comment, so each shows no text.
+  for (const html of ['<!-->', '<!--->', '<!-->\n<!--->']) {
+    assert.equal(showsText(html), false, `${html} shows text`);
+  }
+  // What follows that > shows.
+  for (const html of ['<!-->x', '<!--->x', '<!-->-->']) {
+    assert.equal(showsText(html), true, `${html} shows no text`);
+  }
+  // A line that holds only an empty comment leaves the lead-in above it to the list below it.
+  const environments = 'For safe, controlled testing environments:';
+  const guides = '- [agentpwn.com/tools](https://agentpwn.com/tools) -- security guides for AI tools and MCP servers';
+  for (const html of ['<!-->', '<!--->']) {
+    const text = `${environments}\n\n${html}\n${guides}\n`;
+    assert.deepEqual(guidesListedAsTesting(text), [`${environments} ${guides}`], `${html} hides the lead-in`);
+  }
 });
 
 test('the HTML text check reads a long run of unterminated markup in linear time', () => {
