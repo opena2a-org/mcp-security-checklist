@@ -126,11 +126,12 @@ function referenceExample(heading) {
 
 // A file or directory path in code quotes: a name with the extension of a document, a
 // configuration or a script, or a name that ends in a slash, after any directory names
-// that each end in a slash, such as `test/fixtures/`. A directory name may start with a dot,
-// as `.github/` does, and has no other dot in it, so a domain with a path, such as
-// `agentpwn.com/learn`, is not a file name. Any other token with a dot in it is not a file
-// name either, such as the version `1.0.x`, the key `checks.credentials` or a domain.
-const FILE_NAME = /`((?:\.?[\w-]+\/)*[\w.-]+\.(?:cjs|js|json|md|mjs|py|sh|toml|ts|txt|ya?ml)|(?:\.?[\w-]+\/)+)`/g;
+// that each end in a slash, such as `test/fixtures/`, and after an optional `./`, as in
+// `./test/`. A directory name may start with a dot, as `.github/` does, and has no other dot
+// in it, so a domain with a path, such as `agentpwn.com/learn`, is not a file name. Any other
+// token with a dot in it is not a file name either, such as the version `1.0.x`, the key
+// `checks.credentials` or a domain.
+const FILE_NAME = /`((?:\.\/)?(?:(?:\.?[\w-]+\/)*[\w.-]+\.(?:cjs|js|json|md|mjs|py|sh|toml|ts|txt|ya?ml)|(?:\.?[\w-]+\/)+))`/g;
 const namedFiles = (text) => [...text.matchAll(FILE_NAME)].map(([, path]) => path);
 
 test('the schema is draft 2020-12 and uses only keywords this validator applies', () => {
@@ -250,6 +251,19 @@ test('the file-name check reads a code-quoted path with a directory in it as a f
   const missing = namedFiles(`${policy}\nThe tests run \`test/missing.mjs\`.\n`)
     .filter((path) => !existsSync(new URL(`../${path}`, import.meta.url)));
   assert.deepEqual(missing, ['test/missing.mjs']);
+});
+
+test('the file-name check reads a code-quoted path that starts with ./ as a file name', () => {
+  assert.deepEqual(namedFiles('`./test/missing.mjs`, `./mcp-audit.json` and `./test/`'), [
+    './test/missing.mjs', './mcp-audit.json', './test/',
+  ]);
+  // A domain with a path is not a file name with ./ in front of it either.
+  assert.deepEqual(namedFiles('`./agentpwn.com/learn` and `./agentpwn.com/tools/`'), []);
+  // The security policy with a missing file named from the current directory names that file,
+  // and a file or directory that exists, named the same way, is found.
+  const missing = namedFiles(`${policy}\nThe tests run \`./test/missing.mjs\` on \`./mcp-audit.json\` in \`./test/\`.\n`)
+    .filter((path) => !existsSync(new URL(`../${path}`, import.meta.url)));
+  assert.deepEqual(missing, ['./test/missing.mjs']);
 });
 
 test('docs/reference-audit-configuration.md names each format the schema uses and says a validator has to assert it', () => {
