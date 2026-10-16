@@ -1,10 +1,11 @@
-// Checks the "Supported Versions" table in SECURITY.md, and the page its scope names for
-// what the secretPatterns match.
+// Checks the "Supported Versions" table in SECURITY.md, the page its scope names for
+// what the secretPatterns match, and that its scope covers the documentation accuracy of
+// README.md and of each Markdown page under docs/.
 // Run from the repository root: node --test
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
 const policy = readFileSync(new URL('../SECURITY.md', import.meta.url), 'utf8');
 
@@ -104,4 +105,35 @@ test('the page check reads the README by name, a path in code quotes and a link 
   assert.deepEqual(namedDocuments('see [the reference page](docs/reference-audit-configuration.md)'),
     ['docs/reference-audit-configuration.md']);
   assert.deepEqual(namedDocuments('`mcp-audit.json`, including its `secretPatterns`'), []);
+});
+
+// The pages that carry the checklist's advice: the README and each Markdown page under docs/.
+const ADVICE_PAGES = [
+  'README.md',
+  ...readdirSync(new URL('../docs/', import.meta.url), { recursive: true })
+    .filter((path) => path.endsWith('.md'))
+    .map((path) => `docs/${path}`),
+];
+
+// Returns the advice pages a scope line does not name.
+function uncoveredPages(line, pages) {
+  const named = namedDocuments(line);
+  return pages.filter((path) => !named.includes(path));
+}
+
+test('the scope covers the documentation accuracy of each page that carries advice', () => {
+  const line = section(policy, 'Reporting Vulnerabilities').split('\n').find((text) => text.includes('documentation accuracy'));
+  assert.ok(line, 'the SECURITY.md scope does not cover documentation accuracy');
+  assert.deepEqual(uncoveredPages(line, ADVICE_PAGES), [],
+    `the documentation accuracy line in SECURITY.md does not name these pages: ${line}`);
+});
+
+test('the coverage check names each page a scope line leaves out', () => {
+  const pages = ['README.md', 'docs/reference-audit-configuration.md'];
+  assert.deepEqual(uncoveredPages('- The checklist text in `README.md`, including documentation accuracy', pages),
+    ['docs/reference-audit-configuration.md']);
+  assert.deepEqual(uncoveredPages('- The text in `README.md` and `docs/reference-audit-configuration.md`, including documentation accuracy', pages),
+    []);
+  assert.deepEqual(uncoveredPages('- The text in [the reference page](docs/reference-audit-configuration.md), including documentation accuracy', pages),
+    ['README.md']);
 });
