@@ -6,7 +6,7 @@
 
 [Website](https://opena2a.org) · [Discord](https://discord.gg/uRZa3KXgEn)
 
-A comprehensive security checklist for deploying and operating [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers in production environments.
+A security checklist for deploying and operating [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers in production environments.
 
 MCP enables AI assistants to interact with external tools and data sources. This power comes with significant security implications that must be addressed before deployment.
 
@@ -54,11 +54,12 @@ git hygiene, MCP config, file permissions), run:
 npx hackmyagent secure ./my-mcp-server/
 ```
 
-`secure` exits 1 when it finds a critical or high issue. The full audit's MCP
-checks read an MCP configuration file (for example a `.mcp.json` that
-registers the server), not the server source. Add the configuration your
-clients use to launch the server (a `.mcp.json` entry with its `command` and
-`args`) to bring MCP into the audit.
+`secure` exits 1 when it finds a critical or high issue.
+
+The full audit's MCP checks read an MCP configuration file (for example a
+`.mcp.json` that registers the server), not the server source. Add the
+configuration your clients use to launch the server (a `.mcp.json` entry with
+its `command` and `args`) to bring MCP into the audit.
 
 ## Security Checklist
 
@@ -160,23 +161,24 @@ clients use to launch the server (a `.mcp.json` entry with its `command` and
 
 ## Testing Your Defenses
 
-The best way to verify your MCP security posture is to test against real attack patterns.
+Test your MCP deployment against real attack patterns.
 
 | Attack Category | Description | Test Resource |
 |---|---|---|
-| Tool poisoning | Malicious tool descriptions that alter agent behavior | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2), which injects fake tool results and whose fix text, which the agent is asked to pass to its administrator, says to treat MCP tool descriptions and results as untrusted input |
+| Tool poisoning | Malicious tool descriptions that alter agent behavior | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2) |
 | Parameter injection | Crafted inputs that escape validation | No dedicated test |
-| Credential exfiltration | Attempts to extract secrets via tool responses | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2), whose injected tool result tells the agent to output all environment variables |
+| Credential exfiltration | Attempts to extract secrets via tool responses | No dedicated test. Closest: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2) |
 | Privilege escalation | Gaining access to tools beyond granted permissions | [agentpwn.com/attacks/mcp-exploitation/3](https://agentpwn.com/attacks/mcp-exploitation/3) |
 
 The agentpwn [MCP exploitation](https://agentpwn.com/attacks/mcp-exploitation)
 set has three tests: Tool Discovery, Tool Injection and Cross-Tool Exploit
 Chain. "No dedicated test" means none of the three is built for that
 category; where one comes near, the row names it as "Closest".
+[What each closest test does](docs/reference-audit-configuration.md#attack-categories-with-no-dedicated-test).
 
 ## Documentation
 
-- [Reference audit configuration](docs/reference-audit-configuration.md) -- the `mcp-audit.json` excerpt, its schema and `secretPatterns`, the full audit of a project that holds only server code, and the attack categories with no dedicated test
+- [Reference audit configuration](docs/reference-audit-configuration.md) -- the `mcp-audit.json` excerpt and schema, what `secretPatterns` match, auditing server-only code, and categories with no dedicated test
 - [AI Agent Security guide](https://agentpwn.com/learn) -- guide to attacks on AI agents, one section per attack category, including a section on MCP exploitation
 - [OASB Standard](https://oasb.ai) -- Open Agent Security Benchmark for evaluating agent security
 - [Agent Threat Matrix](https://github.com/opena2a-standards/agent-threat-matrix) -- MITRE ATT&CK-style framework for AI agent threats
