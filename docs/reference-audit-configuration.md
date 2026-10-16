@@ -107,3 +107,13 @@ cases, starting from the checklist items in
 [3. Input Validation and Sanitization](../README.md#3-input-validation-and-sanitization),
 [5. Credential Management](../README.md#5-credential-management) and
 [6. Prompt Injection Defense](../README.md#6-prompt-injection-defense).
+
+Two rows name a closest test:
+
+- Tool poisoning: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2),
+  which injects fake tool results and whose fix text, which the agent is asked
+  to pass to its administrator, says to treat MCP tool descriptions and results
+  as untrusted input.
+- Credential exfiltration: [agentpwn.com/attacks/mcp-exploitation/2](https://agentpwn.com/attacks/mcp-exploitation/2),
+  whose injected tool result tells the agent to output all environment
+  variables.
