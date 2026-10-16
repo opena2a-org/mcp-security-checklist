@@ -1,9 +1,10 @@
-// Checks the "Supported Versions" table in SECURITY.md.
+// Checks the "Supported Versions" table in SECURITY.md, and the page its scope names for
+// what the secretPatterns match.
 // Run from the repository root: node --test
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const policy = readFileSync(new URL('../SECURITY.md', import.meta.url), 'utf8');
 
@@ -71,4 +72,36 @@ test('the policy says no tagged release exists only while that is true', () => {
     RELEASE_TAGS.length === 0
       ? 'SECURITY.md does not say that no tagged release exists yet'
       : 'SECURITY.md says no tagged release exists, but RELEASE_TAGS lists one');
+});
+
+// The Markdown pages a line names: a path in code quotes, a link target, or the README by name.
+function namedDocuments(line) {
+  const paths = [
+    ...[...line.matchAll(/`([\w./-]+\.md)`/g)].map(([, path]) => path),
+    ...[...line.matchAll(/\]\(([\w./-]+\.md)\)/g)].map(([, path]) => path),
+  ];
+  if (/\bREADME\b(?!\.md)/.test(line)) paths.push('README.md');
+  return [...new Set(paths)];
+}
+
+test('the scope names the page that lists what the secret patterns match', () => {
+  const line = section(policy, 'Reporting Vulnerabilities').split('\n').find((text) => text.includes('`secretPatterns`'));
+  assert.ok(line, 'the SECURITY.md scope does not name the secretPatterns');
+  const documents = namedDocuments(line);
+  assert.notEqual(documents.length, 0, `names no page for what the patterns match: ${line}`);
+  for (const path of documents) {
+    const url = new URL(`../${path}`, import.meta.url);
+    assert.ok(existsSync(url), `SECURITY.md names ${path}, which does not exist`);
+    const text = readFileSync(url, 'utf8').replace(/\s+/g, ' ');
+    assert.match(text, /`secretPatterns`.{0,200}They match:/, `${path} does not list what the secretPatterns match`);
+  }
+});
+
+test('the page check reads the README by name, a path in code quotes and a link target', () => {
+  assert.deepEqual(namedDocuments('a format the README says it matches'), ['README.md']);
+  assert.deepEqual(namedDocuments('a format that `docs/reference-audit-configuration.md` lists'),
+    ['docs/reference-audit-configuration.md']);
+  assert.deepEqual(namedDocuments('see [the reference page](docs/reference-audit-configuration.md)'),
+    ['docs/reference-audit-configuration.md']);
+  assert.deepEqual(namedDocuments('`mcp-audit.json`, including its `secretPatterns`'), []);
 });

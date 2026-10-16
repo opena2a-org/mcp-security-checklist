@@ -17,7 +17,7 @@ If you discover a security vulnerability in the MCP Security Checklist text, its
 
 This policy covers:
 - The checklist text in `README.md`, including documentation accuracy (security advice that is itself insecure)
-- The reference configuration `mcp-audit.json`, including its `secretPatterns` (for example, a pattern that misses a credential format the README says it matches)
+- The reference configuration `mcp-audit.json`, including its `secretPatterns` (for example, a pattern that misses a credential format that [docs/reference-audit-configuration.md](docs/reference-audit-configuration.md) says it matches)
 - The configuration's schema, `mcp-audit.schema.json`
 
 The repository ships no audit tool or script. The tests under `test/` check the files above.
