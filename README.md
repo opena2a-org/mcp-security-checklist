@@ -67,7 +67,6 @@ its `command` and `args`) to bring MCP into the audit.
 
 These checks are deployment recommendations, not universal requirements of the MCP protocol. For remote Streamable HTTP servers, evaluate HTTPS, network controls and access-token validation when authorization is enabled. For local stdio servers, MCP messages travel through a client-launched subprocess, not an HTTP connection; HTTP OAuth does not apply. Review subprocess permissions, environment credentials, and tool-level access instead. See the official [transport overview](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports) and [authorization requirements](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization).
 
-
 ### 1. Transport Layer Security
 
 - [ ] Remote HTTP MCP endpoints use HTTPS with TLS 1.3 or higher (not applicable to local stdio)
