@@ -63,9 +63,14 @@ its `command` and `args`) to bring MCP into the audit.
 
 ## Security Checklist
 
+### Transport-specific scope
+
+These checks are deployment recommendations, not universal requirements of the MCP protocol. For remote Streamable HTTP servers, evaluate HTTPS, network controls and access-token validation when authorization is enabled. For local stdio servers, MCP messages travel through a client-launched subprocess, not an HTTP connection; HTTP OAuth does not apply. Review subprocess permissions, environment credentials, and tool-level access instead. See the official [transport overview](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports) and [authorization requirements](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization).
+
+
 ### 1. Transport Layer Security
 
-- [ ] All MCP connections use TLS 1.3 or higher
+- [ ] Remote HTTP MCP endpoints use HTTPS with TLS 1.3 or higher (not applicable to local stdio)
 - [ ] Certificate pinning enabled for production endpoints
 - [ ] mTLS configured for server-to-server MCP communication
 - [ ] WebSocket connections use `wss://` (never `ws://`)
@@ -73,11 +78,11 @@ its `command` and `args`) to bring MCP into the audit.
 
 ### 2. Authentication and Authorization
 
-- [ ] Every MCP tool call requires a valid authentication token
+- [ ] Protected HTTP MCP tool calls validate the appropriate access token; local stdio tool access is governed by subprocess permissions and tool authorization
 - [ ] Tokens are short-lived (< 1 hour) with refresh rotation
 - [ ] Tool-level permissions enforced (not just server-level)
 - [ ] API keys are never passed through prompt context
-- [ ] OAuth 2.0 / OIDC used for user-facing MCP servers
+- [ ] Protected HTTP MCP servers follow the MCP OAuth-based authorization specification (not applicable to stdio)
 - [ ] Service accounts have minimum required permissions
 
 ### 3. Input Validation and Sanitization
